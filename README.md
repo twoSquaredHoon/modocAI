@@ -17,6 +17,15 @@ Blog imbed
 
 **Workflow**
 1. Copy the blog post, make the script
+
+**Automated (blog URL → script):** Paste your Gemini API key in `.env`, then run:
+```bash
+./setup.sh   # once
+./blog-to-script.sh "https://your-blog-post-url"
+```
+Saves to `output/scripts/`. Uses the script rules below via Gemini.
+
+**Manual prompt (paste blog text into Gemini/Chat):**
 ```
 **SCRIPT RULES:**
 _No medical jargon. Short sentences only. Written to be SPOKEN out loud. Under 45 seconds total when read aloud._

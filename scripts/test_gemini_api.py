@@ -4,27 +4,14 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-
-def get_api_key() -> str:
-    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not key or not key.strip():
-        print(
-            "Missing API key. Open .env in the project root and set:\n"
-            "  GEMINI_API_KEY=your-key-here",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+from gemini_util import get_client
 
 
 def test_auth_and_models(client: genai.Client) -> list[str]:
@@ -145,7 +132,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    client = genai.Client(api_key=get_api_key())
+    client = get_client()
     print("Gemini API key test\n" + "=" * 40)
 
     try:

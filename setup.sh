@@ -9,4 +9,6 @@ fi
 
 python3 -m venv .venv
 .venv/bin/pip install -q -r requirements.txt
-echo "Done. Add your key to .env, then run: ./test-api.sh"
+echo "Done. Add your key to .env, then run:"
+echo "  ./test-api.sh"
+echo "  ./blog-to-script.sh \"https://your-blog-url\""
