@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 from google import genai
 from google.genai import types
 
 from gemini_util import get_client
+from veo_util import generate_video
 
 
 def test_auth_and_models(client: genai.Client) -> list[str]:
@@ -59,41 +59,15 @@ def test_video(
     print("Starting Veo video generation (paid; often 1–3 minutes)...")
     print(f"  model: {model}")
     print(f"  prompt: {prompt!r}")
-    operation = client.models.generate_videos(
-        model=model,
-        prompt=prompt,
-        config=types.GenerateVideosConfig(
-            number_of_videos=1,
-            duration_seconds=duration_seconds,
-        ),
-    )
-    poll_seconds = 15
-    while not operation.done:
-        print(f"  waiting... ({poll_seconds}s)")
-        time.sleep(poll_seconds)
-        operation = client.operations.get(operation)
-
-    if operation.error:
-        raise RuntimeError(f"Video generation failed: {operation.error}")
-
-    generated = operation.response.generated_videos
-    if not generated:
-        raise RuntimeError("No video in response.")
-
-    video = generated[0].video
-    if video is None:
-        raise RuntimeError("No video payload in response.")
-
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / "test_clip.mp4"
-
-    if video.video_bytes:
-        out_path.write_bytes(video.video_bytes)
-    else:
-        # Veo returns a remote file reference; download via Files API.
-        data = client.files.download(file=video)
-        out_path.write_bytes(data)
-
+    generate_video(
+        client,
+        model=model,
+        prompt=prompt,
+        output_path=out_path,
+        duration_seconds=duration_seconds,
+    )
     print(f"  OK — saved to {out_path}")
     return out_path
 

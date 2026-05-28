@@ -16,6 +16,9 @@ Facebook
 Blog imbed
 
 **Workflow**
+
+See **[WORKFLOW.md](WORKFLOW.md)** for step-by-step commands (setup, script, voiceover, clips, resume).
+
 1. Copy the blog post, make the script
 
 **Automated (blog URL → script):** Paste your Gemini API key in `.env`, then run:
@@ -39,9 +42,20 @@ _When writing each section keep the visuals in mind:_
 - _CTA (last 3 seconds): End with a comment-bait question like 'Has your child ever done this? Drop a comment below' or 'Tag a parent who needs to see this'._
 ```
 
-2. Text to script https://aistudio.google.com/generate-speech
-- Paste the script into the box
-- control speed so that it is under a minute
+2. Voiceover (script → audio)
+
+**Automated (Gemini TTS, same API key in `.env`):**
+```bash
+./script-to-voiceover.sh output/scripts/your-script-20260527.txt
+```
+Saves `output/voiceovers/<name>/voiceover.wav` and `speech.txt`.
+
+Optional: save into your clips folder too:
+```bash
+./script-to-voiceover.sh output/scripts/your-script.txt --clips-dir output/clips/your-run-folder
+```
+
+**Manual:** [AI Studio speech](https://aistudio.google.com/generate-speech) — paste script, adjust speed under 1 minute.
 
 3. Clips prompts
 - **STEP 1 — Clip decision prompt** Feed the script in and it decides what clips are needed based purely on what the script is saying. No visual rules yet, just "what should we see here."
@@ -84,3 +98,28 @@ _Clip descriptions: [paste Step 1 output here]"_
 
 
 **STEP 3 — You generate the clips**
+
+**Automated (script → prompts → Veo clips):**
+```bash
+./script-to-clips.sh output/scripts/your-script-20260527.txt
+```
+Writes `output/clips/<name>/` with `clip_decisions.txt`, `clip_prompts.txt`, and `videos/*.mp4`.
+
+Preview prompts only (no Veo charges):
+```bash
+./script-to-clips.sh output/scripts/your-script-20260527.txt --prompts-only
+```
+
+If generation stops partway, resume (skips clips already saved):
+```bash
+./script-to-clips.sh --resume output/clips/your-run-folder
+# or re-run the same script path — it auto-continues the latest incomplete run
+./script-to-clips.sh output/scripts/your-script-20260527.txt
+```
+
+**Full pipeline (blog URL → script → clips):**
+```bash
+./make-video.sh "https://your-blog-post-url"
+```
+
+**Manual:** Paste Step 1 output into Step 2, then generate in Runway/Kling.

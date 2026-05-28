@@ -36,3 +36,59 @@ RELIEF:
 CTA:
 [spoken lines]
 """.strip()
+
+CLIP_DECISION_PROMPT = """
+You are a video director. Read the script below and decide what video clips are needed to visually support what is being said. Base your decisions ONLY on what the script is describing — do not add creative interpretation.
+
+For each section of the script output one clip description. The description should answer only one question: WHAT should the viewer see at this moment?
+
+Rules:
+- No camera angles
+- No lighting instructions
+- No style directions
+- Just describe the subject, the setting, and what is happening
+- If the script mentions a specific age, the clip must reflect that age
+- Keep each description to one clear sentence
+- Split BODY into 2 clips if the body covers distinct visual moments (e.g. sick child, then warning signs). Otherwise use BODY CLIP 1 only.
+
+Format exactly like this (include every label that applies):
+HOOK CLIP: [what we see]
+BODY CLIP 1: [what we see]
+BODY CLIP 2: [what we see]   (omit if not needed)
+RELIEF CLIP: [what we see]
+CTA CLIP: [what we see]
+""".strip()
+
+CLIP_DETAIL_JSON_INSTRUCTION = """
+You are an AI video prompt specialist. Take the clip descriptions below and turn each one into a detailed AI video generation prompt.
+
+For each clip include in detailed_prompt:
+- SUBJECT: Who or what is in the shot (age, appearance, clothing, expression, body language)
+- SETTING: Environment in detail
+- ACTION: Precise physical action (no vague words like "looks sick")
+- MOOD: One word — Tense, Neutral, Warm, or Relieved
+- CAMERA: Static shot / Slow zoom in / Gentle handheld
+- LIGHTING: Dark and moody for hook / Neutral for body / Bright and warm for relief and CTA
+- STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+Rules:
+- Never invent medical facts not implied by the clip description
+- If a child is mentioned, include exact age
+- veo_prompt must be one self-contained paragraph under 400 words, combining the above for direct use in a video API
+- duration_seconds: 4 for hook and CTA, 6 for body and relief clips
+
+Respond with ONLY valid JSON (no markdown fences):
+{
+  "clips": [
+    {
+      "id": "hook",
+      "label": "HOOK CLIP",
+      "detailed_prompt": "...",
+      "veo_prompt": "...",
+      "duration_seconds": 4
+    }
+  ]
+}
+
+Use ids: hook, body_1, body_2 (if needed), relief, cta
+""".strip()

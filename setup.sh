@@ -12,3 +12,6 @@ python3 -m venv .venv
 echo "Done. Add your key to .env, then run:"
 echo "  ./test-api.sh"
 echo "  ./blog-to-script.sh \"https://your-blog-url\""
+echo "  ./script-to-voiceover.sh output/scripts/your-script.txt"
+echo "  ./script-to-clips.sh output/scripts/your-script.txt"
+echo "  ./make-video.sh \"https://your-blog-url\""
