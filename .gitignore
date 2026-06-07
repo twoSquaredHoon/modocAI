@@ -3,4 +3,11 @@
 venv/
 __pycache__/
 *.pyc
-output/
+output/*
+!output/scripts/
+!output/clips/
+!output/voiceovers/
+!output/projects/
+!output/**/.gitkeep
+ModocStudio/.build/
+ModocStudio.app/

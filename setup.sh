@@ -10,6 +10,7 @@ fi
 python3 -m venv .venv
 .venv/bin/pip install -q -r requirements.txt
 echo "Done. Add your key to .env, then run:"
+echo "  ./clear-outputs.sh --yes   # reset outputs before a new blog"
 echo "  ./test-api.sh"
 echo "  ./blog-to-script.sh \"https://your-blog-url\""
 echo "  ./script-to-voiceover.sh output/scripts/your-script.txt"

@@ -4,6 +4,18 @@ Rule for every step: **be medically accurate**. Scripts and clips must match the
 
 ---
 
+## Start a new video (clear old outputs)
+
+```bash
+./clear-outputs.sh
+# or skip confirmation:
+./clear-outputs.sh --yes
+```
+
+Removes all files under `output/scripts/`, `output/clips/`, and `output/voiceovers/`. Does **not** delete `.env` or your API key.
+
+---
+
 ## One-time setup
 
 1. Get a Gemini API key: https://aistudio.google.com/apikey  
@@ -48,27 +60,38 @@ Rule for every step: **be medically accurate**. Scripts and clips must match the
 
 ## Step 2 — Script → voiceover
 
-**What it does:** Turns the script into a `.wav` voiceover (Gemini TTS). Strips section labels; only spoken lines are read.
+**What it does:** Turns the script into a `.wav` voiceover (Gemini TTS). Strips section labels; only spoken lines are read. **Pace is automatic by default** — it speeds up speech to fit your total video length.
 
-**Command:**
+**List your real file paths** (do not copy placeholder names like `your-script.txt`):
 ```bash
-./script-to-voiceover.sh output/scripts/your-script-file.txt
+./list-outputs.sh
+# or:  ls output/scripts/    ls output/clips/
 ```
+
+**Command** (use the `.txt` filename you see in `output/scripts/`):
+```bash
+./script-to-voiceover.sh output/scripts/q-my-6-year-old-has-gastroenteritis-but-is-getting-more-leth-20260527.txt
+```
+
+**Best timing — pass your clips folder** (uses `clips.json` durations, e.g. 4+6+6+6+4 = 26s):
+```bash
+# After prompts exist (even before Veo finishes):
+./script-to-clips.sh output/scripts/q-my-6-year-old-has-gastroenteritis-but-is-getting-more-leth-20260527.txt --prompts-only
+./script-to-voiceover.sh output/scripts/q-my-6-year-old-has-gastroenteritis-but-is-getting-more-leth-20260527.txt \
+  --clips-dir output/clips/q-my-6-year-old-has-gastroenteritis-but-is-getting-20260527-2257
+```
+Replace the clips folder with the one `list-outputs.sh` shows (timestamp may differ).
 
 **Output:**
 - `output/voiceovers/<slug>-<time>/voiceover.wav`
 - `output/voiceovers/<slug>-<time>/speech.txt`
-
-**Optional — also save into a clips folder:**
-```bash
-./script-to-voiceover.sh output/scripts/your-script-file.txt \
-  --clips-dir output/clips/your-clips-run-folder
-```
+- `output/voiceovers/<slug>-<time>/voiceover_meta.json` — target vs actual seconds
 
 **Options:**
 ```bash
---pace slow|normal|fast    # default: normal
---voice Kore               # other voices: see Gemini TTS docs
+--pace auto|slow|normal|fast|very_fast   # default: auto (faster when video is short)
+--target-seconds 28                      # override total video length
+--voice Kore
 --model gemini-2.5-flash-preview-tts
 ```
 
@@ -108,24 +131,41 @@ Or run the same script path again; it auto-continues the latest incomplete run:
 ./script-to-clips.sh output/scripts/your-script-file.txt
 ```
 
+**Add one new clip** (e.g. SIGNS) to a run that already has other `.mp4` files:
+```bash
+./generate-clip.sh signs output/clips/PROMPTS_FOLDER output/clips/VIDEOS_FOLDER
+```
+
+**SIGNS clips = one file per warning sign** (`signs_1.mp4`, `signs_2.mp4`, … — edit separately). Rebuild + regenerate all:
+```bash
+./refresh-signs-clip.sh output/clips/YOUR_CLIPS_FOLDER output/scripts/YOUR_SCRIPT.txt
+```
+Count adjusts automatically from the script (usually 3–6 signs).
+
 ---
 
 ## Full run (copy-paste template)
 
-Replace `BLOG_URL` and `SCRIPT_FILE` with your paths.
+> **Do not** use literal names like `your-script.txt` or `your-clips-run-folder` — those are placeholders. Run `./list-outputs.sh` and paste your real paths.
 
 ```bash
 cd /Users/seunghoon/Documents/2.Area/modocAI
 
 # 1 — Script
-./blog-to-script.sh "BLOG_URL"
-# Note the new file under output/scripts/
+./blog-to-script.sh "https://your-blog-post-url"
+./list-outputs.sh   # copy the script path shown
 
-# 2 — Voiceover
-./script-to-voiceover.sh output/scripts/SCRIPT_FILE.txt
+# 2 — Clip prompts (fast; needed for accurate voiceover timing)
+./script-to-clips.sh output/scripts/<paste-your-script>.txt --prompts-only
+./list-outputs.sh   # copy the clips folder shown
 
-# 3 — Clips (long; paid)
-./script-to-clips.sh output/scripts/SCRIPT_FILE.txt
+# 3 — Voiceover (timed to clip lengths)
+./script-to-voiceover.sh output/scripts/<paste-your-script>.txt \
+  --clips-dir output/clips/<paste-your-clips-folder>
+
+# 4 — Generate Veo clips (long; paid)
+./script-to-clips.sh output/scripts/<paste-your-script>.txt
+# or: ./script-to-clips.sh --resume output/clips/<paste-your-clips-folder>
 ```
 
 **Blog → script → clips only** (skips voiceover):

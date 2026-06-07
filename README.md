@@ -38,22 +38,17 @@ _If the blog mentions a specific age or age group, every reference to a child in
 _When writing each section keep the visuals in mind:_
 - _HOOK (0–3 seconds): Start with a terrifying but true statement that makes any parent think their child is in danger RIGHT NOW. Use phrases like 'If your child does this, stop everything', 'Most parents have no idea this is happening to their child', 'This everyday habit could be silently harming your kid'. The hook must feel urgent and personal — not generic._
 - _BODY (3–35 seconds): Reveal the problem clearly. Use short punchy sentences. One idea per line. Make the parent feel like they are learning something their doctor never told them. Build the tension slightly before releasing it._
-- _RELIEF (35–42 seconds): Now rescue them. Give them the solution or reassurance clearly and confidently. They should feel relieved but also grateful they watched._
+- _RELIEF (35–42 seconds): Briefly name the warning signs again in short form, then clear action — ER if those signs, otherwise doctor today. Do not say "if you see these" without listing what "these" are._
 - _CTA (last 3 seconds): End with a comment-bait question like 'Has your child ever done this? Drop a comment below' or 'Tag a parent who needs to see this'._
 ```
 
 2. Voiceover (script → audio)
 
-**Automated (Gemini TTS, same API key in `.env`):**
+**Automated (Gemini TTS, same API key in `.env`):** Pace defaults to **auto** — speeds up speech to match total video length.
 ```bash
 ./script-to-voiceover.sh output/scripts/your-script-20260527.txt
 ```
-Saves `output/voiceovers/<name>/voiceover.wav` and `speech.txt`.
-
-Optional: save into your clips folder too:
-```bash
-./script-to-voiceover.sh output/scripts/your-script.txt --clips-dir output/clips/your-run-folder
-```
+Best with clip timings: `--clips-dir output/clips/your-run-folder` (after `--prompts-only` or full clips run).
 
 **Manual:** [AI Studio speech](https://aistudio.google.com/generate-speech) — paste script, adjust speed under 1 minute.
 
@@ -64,7 +59,7 @@ Optional: save into your clips folder too:
 For each section of the script output one clip description. The description should answer only one question: WHAT should the viewer see at this moment?
 Rules: No camera angles No lighting instructions No style directions Just describe the subject, the setting, and what is happening If the script mentions a specific age, the clip must reflect that age_ Keep each description to one clear sentence
 
-_Format it as:_ _HOOK CLIP: [what we see]_ _BODY CLIP 1: [what we see]_ _BODY CLIP 2: [what we see]_ _RELIEF CLIP: [what we see]_ _CTA CLIP: [what we see]_
+_Format it as:_ _HOOK CLIP_ → _BODY CLIP 1_ → _BODY CLIP 2_ → _SIGNS CLIP_ (“look for these signs” / warning list) → _RELIEF CLIP_ → _CTA CLIP_
 ```
 
 
