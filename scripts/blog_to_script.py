@@ -14,7 +14,7 @@ import trafilatura
 from google.genai import types
 
 from gemini_util import PROJECT_ROOT, get_client
-from prompts import SCRIPT_RULES
+from language_config import get_language, normalize_language
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 OUTPUT_DIR = PROJECT_ROOT / "output" / "scripts"
@@ -48,9 +48,12 @@ def slug_from_url(url: str) -> str:
     return slug[:60] or "blog-post"
 
 
-def generate_script(blog_text: str, *, model: str, source_url: str) -> str:
+def generate_script(
+    blog_text: str, *, model: str, source_url: str, language: str = "en"
+) -> str:
     client = get_client()
-    print(f"Writing script with {model}...")
+    lang = get_language(language)
+    print(f"Writing script with {model} ({lang.label})...")
 
     user_message = f"""Blog URL: {source_url}
 
@@ -59,7 +62,7 @@ Blog article text:
 {blog_text}
 ---
 
-{SCRIPT_RULES}
+{lang.script_rules}
 """
 
     response = client.models.generate_content(
@@ -67,10 +70,7 @@ Blog article text:
         contents=user_message,
         config=types.GenerateContentConfig(
             temperature=0.4,
-            system_instruction=(
-                "You turn parenting blog posts into short spoken video scripts. "
-                "Medical accuracy is mandatory; never add claims not in the source."
-            ),
+            system_instruction=lang.script_system,
         ),
     )
     script = (response.text or "").strip()
@@ -95,6 +95,12 @@ def main() -> None:
         help="Save script to this file (default: output/scripts/<slug>-<date>.txt)",
     )
     parser.add_argument(
+        "--language",
+        default="en",
+        choices=["en", "ko", "es"],
+        help="Script language: en (English), ko (Korean), or es (Spanish). Default: en",
+    )
+    parser.add_argument(
         "--print-only",
         action="store_true",
         help="Print script to terminal only; do not save a file.",
@@ -107,8 +113,11 @@ def main() -> None:
         sys.exit(1)
 
     try:
+        language = normalize_language(args.language)
         blog_text = fetch_blog_text(url)
-        script = generate_script(blog_text, model=args.model, source_url=url)
+        script = generate_script(
+            blog_text, model=args.model, source_url=url, language=language
+        )
     except Exception as exc:
         print(f"\nFAILED: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -125,7 +134,12 @@ def main() -> None:
         out_path = OUTPUT_DIR / f"{slug_from_url(url)}-{stamp}.txt"
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    header = f"# Source: {url}\n# Generated: {datetime.now().isoformat(timespec='seconds')}\n\n"
+    lang = normalize_language(args.language)
+    header = (
+        f"# Source: {url}\n"
+        f"# Language: {lang}\n"
+        f"# Generated: {datetime.now().isoformat(timespec='seconds')}\n\n"
+    )
     out_path.write_text(header + script + "\n", encoding="utf-8")
     print("\n" + "=" * 40)
     print(f"Saved to {out_path}")

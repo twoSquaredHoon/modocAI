@@ -29,7 +29,11 @@ final class PipelineService: ObservableObject {
         case .generateScript:
             try await runPython(
                 script: "scripts/blog_to_script.py",
-                args: [project.manifest.blogURL, "--output", project.scriptURL.path]
+                args: [
+                    project.manifest.blogURL,
+                    "--output", project.scriptURL.path,
+                    "--language", project.manifest.language.rawValue,
+                ]
             )
         case .generatePrompts:
             try await runPython(
@@ -56,6 +60,7 @@ final class PipelineService: ObservableObject {
                     project.scriptURL.path,
                     "--output", project.voiceoverURL.path,
                     "--clips-dir", project.folderURL.path,
+                    "--language", project.manifest.language.rawValue,
                 ]
             )
         case .regenerateClip(let clipId):

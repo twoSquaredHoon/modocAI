@@ -14,10 +14,10 @@ from pathlib import Path
 from google.genai import types
 
 from gemini_util import PROJECT_ROOT, get_client
+from language_config import get_language, normalize_language
 from path_hints import format_clips_dir_not_found, format_script_not_found
 
 DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts"
-DEFAULT_VOICE = "Kore"
 OUTPUT_BASE = PROJECT_ROOT / "output" / "voiceovers"
 SECTION_HEADERS = frozenset({"HOOK", "BODY", "RELIEF", "CTA"})
 # Typical Veo clip lengths used by script_to_clips (seconds per clip type).
@@ -29,6 +29,7 @@ DEFAULT_CLIP_SECONDS = {
     "cta": 4,
 }
 WPM_REFERENCE = {"slow": 130, "normal": 150, "fast": 175, "very_fast": 205}
+CPM_REFERENCE = {"slow": 280, "normal": 340, "fast": 400, "very_fast": 460}
 PACE_ORDER = ["slow", "normal", "fast", "very_fast"]
 
 
@@ -42,6 +43,17 @@ def load_script(path: Path) -> str:
     if not text:
         raise ValueError(f"No script content in {path}")
     return text
+
+
+def language_from_script_file(path: Path) -> str | None:
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines()[:20]:
+            stripped = line.strip()
+            if stripped.lower().startswith("# language:"):
+                return normalize_language(stripped.split(":", 1)[1].strip())
+    except OSError:
+        pass
+    return None
 
 
 def script_to_speech_text(script: str) -> str:
@@ -126,16 +138,30 @@ def resolve_target_seconds(
     return estimate_video_seconds(speech_text)
 
 
-def pick_pace_for_target(word_count: int, target_seconds: float) -> str:
+def speech_unit_count(text: str, *, language: str) -> int:
+    """Word count for English; Hangul syllable count for Korean."""
+    lang = get_language(language)
+    if lang.uses_syllable_pacing:
+        hangul = len(re.findall(r"[\uac00-\ud7a3]", text))
+        if hangul:
+            return hangul
+        return len(re.sub(r"\s+", "", text))
+    return len(text.split())
+
+
+def pick_pace_for_target(unit_count: int, target_seconds: float, *, language: str) -> str:
     """Choose pace so estimated read time fits the video (biased slightly fast)."""
-    if word_count <= 0 or target_seconds <= 0:
+    lang = get_language(language)
+    reference = CPM_REFERENCE if lang.uses_syllable_pacing else WPM_REFERENCE
+    label = "cpm" if lang.uses_syllable_pacing else "wpm"
+    if unit_count <= 0 or target_seconds <= 0:
         return "fast"
-    wpm_needed = (word_count / target_seconds) * 60
-    if wpm_needed >= WPM_REFERENCE["fast"] + 12:
+    rate_needed = (unit_count / target_seconds) * 60
+    if rate_needed >= reference["fast"] + (12 if not lang.uses_syllable_pacing else 40):
         return "very_fast"
-    if wpm_needed >= WPM_REFERENCE["normal"] + 10:
+    if rate_needed >= reference["normal"] + (10 if not lang.uses_syllable_pacing else 35):
         return "fast"
-    if wpm_needed >= WPM_REFERENCE["slow"] + 8:
+    if rate_needed >= reference["slow"] + (8 if not lang.uses_syllable_pacing else 30):
         return "normal"
     return "slow"
 
@@ -155,7 +181,59 @@ def build_tts_prompt(
     *,
     pace: str,
     target_seconds: float,
+    language: str,
 ) -> str:
+    lang = get_language(language)
+    target_int = max(15, int(round(target_seconds)))
+
+    if lang.code == "ko":
+        pace_hints = {
+            "slow": "천천히 또박또박 읽어 주세요.",
+            "normal": "자연스러운 대화 속도로 읽어 주세요.",
+            "fast": (
+                "숏폼 영상에 맞게 빠르고 또렷한 속도로 읽어 주세요. "
+                "에너지는 살리되, 급하게 뭉개지 않게."
+            ),
+            "very_fast": (
+                "릴스·틱톡 나레이션처럼 눈에 띄게 빠른 속도로 읽어 주세요. "
+                "모든 발음은 분명하게, 문장 사이 쉼은 최소화."
+            ),
+        }
+        pace_hint = pace_hints.get(pace, pace_hints["fast"])
+        return (
+            "다음 육아 건강 숏폼 영상 대본을 한국어로 낭독해 주세요. "
+            "따뜻하고 차분하며 신뢰감 있는 톤 — 소아과 의사가 부모에게 말하는 것처럼. "
+            f"{pace_hint} "
+            f"중요: 전체 낭독은 약 {target_int}초 안에 끝나야 합니다 "
+            f"({target_int}초 분량의 영상과 맞춤). "
+            "대본을 정확히 읽고, 단어를 추가하거나 빼지 마세요.\n\n"
+            f"{speech_text}"
+        )
+
+    if lang.code == "es":
+        pace_hints = {
+            "slow": "Habla despacio y con claridad.",
+            "normal": "Habla a un ritmo conversacional y constante.",
+            "fast": (
+                "Habla con un ritmo ágil y claro, típico de un video corto en redes sociales. "
+                "Mantén la energía sin sonar apresurado."
+            ),
+            "very_fast": (
+                "Habla notablemente más rápido, como en un Reels o TikTok de 30 segundos. "
+                "Cada palabra debe ser clara; minimiza las pausas entre frases."
+            ),
+        }
+        pace_hint = pace_hints.get(pace, pace_hints["fast"])
+        return (
+            "Lee en voz alta el siguiente guion de video sobre crianza y salud infantil. "
+            "Suena cálido, calmado y confiable — como un pediatra hablando con padres. "
+            f"{pace_hint} "
+            f"IMPORTANTE: Todo el guion debe terminar en unos {target_int} segundos "
+            f"para coincidir con la duración del video ({target_int}s de metraje). "
+            "Lee cada línea exactamente; no agregues ni omitas palabras.\n\n"
+            f"{speech_text}"
+        )
+
     pace_hints = {
         "slow": "Speak slowly and clearly.",
         "normal": "Speak at a steady conversational pace.",
@@ -169,7 +247,6 @@ def build_tts_prompt(
         ),
     }
     pace_hint = pace_hints.get(pace, pace_hints["fast"])
-    target_int = max(15, int(round(target_seconds)))
 
     return (
         "Read the following parenting video script aloud for social media. "
@@ -214,11 +291,16 @@ def generate_voiceover(
     voice: str,
     pace: str,
     target_seconds: float,
+    language: str,
 ) -> bytes:
+    lang = get_language(language)
     prompt = build_tts_prompt(
-        speech_text, pace=pace, target_seconds=target_seconds
+        speech_text, pace=pace, target_seconds=target_seconds, language=language
     )
-    print(f"Generating voiceover ({model}, voice={voice}, pace={pace})...")
+    print(
+        f"Generating voiceover ({model}, voice={voice}, "
+        f"lang={lang.tts_language_code}, pace={pace})..."
+    )
 
     response = client.models.generate_content(
         model=model,
@@ -231,7 +313,7 @@ def generate_voiceover(
                         voice_name=voice,
                     )
                 ),
-                language_code="en-US",
+                language_code=lang.tts_language_code,
             ),
         ),
     )
@@ -256,8 +338,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--voice",
-        default=DEFAULT_VOICE,
-        help=f"Prebuilt voice name (default: {DEFAULT_VOICE})",
+        default=None,
+        help="Prebuilt voice name (default: Charon for English, Kore for Korean)",
     )
     parser.add_argument(
         "--pace",
@@ -278,6 +360,12 @@ def main() -> None:
         "--output",
         type=Path,
         help="Output .wav path (default: output/voiceovers/<slug>-<time>/voiceover.wav)",
+    )
+    parser.add_argument(
+        "--language",
+        default=None,
+        choices=["en", "ko", "es"],
+        help="Voiceover language (default: from script # Language: header, else en)",
     )
     parser.add_argument(
         "--clips-dir",
@@ -319,10 +407,16 @@ def main() -> None:
         if not speech_text:
             raise ValueError("No spoken lines found in script.")
 
+        language = normalize_language(
+            args.language or language_from_script_file(script_path) or "en"
+        )
+        lang = get_language(language)
+        voice = args.voice or lang.tts_voice
+
         out_wav.parent.mkdir(parents=True, exist_ok=True)
         (out_wav.parent / "speech.txt").write_text(speech_text + "\n", encoding="utf-8")
 
-        word_count = len(speech_text.split())
+        unit_count = speech_unit_count(speech_text, language=language)
         clips_path = args.clips_dir.expanduser().resolve() if args.clips_dir else None
         video_seconds = resolve_target_seconds(
             speech_text,
@@ -333,22 +427,28 @@ def main() -> None:
         speak_target = video_seconds * 0.93
 
         if args.pace == "auto":
-            pace = pick_pace_for_target(word_count, speak_target)
+            pace = pick_pace_for_target(unit_count, speak_target, language=language)
         else:
             pace = args.pace
 
-        wpm_est = (word_count / speak_target) * 60 if speak_target else 0
-        print(f"  {word_count} words | video ~{video_seconds}s | target voice ~{speak_target:.0f}s")
-        print(f"  pace: {pace} (~{wpm_est:.0f} wpm needed)")
+        rate_label = "cpm" if lang.uses_syllable_pacing else "wpm"
+        rate_est = (unit_count / speak_target) * 60 if speak_target else 0
+        unit_label = "syllables" if lang.uses_syllable_pacing else "words"
+        print(
+            f"  {unit_count} {unit_label} ({lang.label}) | "
+            f"video ~{video_seconds}s | target voice ~{speak_target:.0f}s"
+        )
+        print(f"  pace: {pace} (~{rate_est:.0f} {rate_label} needed)")
 
         client = get_client()
         pcm = generate_voiceover(
             client,
             speech_text=speech_text,
             model=args.model,
-            voice=args.voice,
+            voice=voice,
             pace=pace,
             target_seconds=speak_target,
+            language=language,
         )
 
         duration = pcm_duration_seconds(pcm)
@@ -364,9 +464,10 @@ def main() -> None:
                     client,
                     speech_text=speech_text,
                     model=args.model,
-                    voice=args.voice,
+                    voice=voice,
                     pace=pace,
                     target_seconds=speak_target * 0.9,
+                    language=language,
                 )
                 duration = pcm_duration_seconds(pcm)
 
@@ -374,11 +475,13 @@ def main() -> None:
         print(f"Saved → {out_wav} ({duration:.1f}s audio, {video_seconds}s video)")
 
         meta = {
-            "word_count": word_count,
+            "language": language,
+            "unit_count": unit_count,
             "video_seconds": video_seconds,
             "speak_target_seconds": round(speak_target, 1),
             "audio_seconds": round(duration, 1),
             "pace": pace,
+            "voice": voice,
         }
         (out_wav.parent / "voiceover_meta.json").write_text(
             json.dumps(meta, indent=2) + "\n", encoding="utf-8"

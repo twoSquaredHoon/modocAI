@@ -7,6 +7,7 @@ struct ProjectDetailView: View {
     @State private var tab: DetailTab = .workflow
     @State private var selectedClipID: String?
     @State private var actionError: String?
+    @State private var showLanguageHint = false
 
     enum DetailTab: String, CaseIterable, Identifiable {
         case workflow = "Workflow"
@@ -20,8 +21,12 @@ struct ProjectDetailView: View {
         var id: String { rawValue }
     }
 
-    private var clips: [ClipRecord] { project.loadClips() }
-    private var videoStatus: (done: Int, total: Int) { project.videoStatus(for: clips) }
+    private var clips: [ClipRecord] { current.loadClips() }
+    private var videoStatus: (done: Int, total: Int) { current.videoStatus(for: clips) }
+
+    private var current: VideoProject {
+        store.selectedProject ?? project
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,18 +43,18 @@ struct ProjectDetailView: View {
             Group {
                 switch tab {
                 case .workflow:
-                    WorkflowView(project: project, actionError: $actionError)
+                    WorkflowView(project: current, actionError: $actionError)
                 case .graph:
-                    WorkflowGraphView(project: project)
+                    WorkflowGraphView(project: current)
                 case .script:
-                    ScriptReviewView(script: project.loadScript())
+                    ScriptReviewView(script: current.loadScript())
                 case .prompts:
-                    PromptsView(decisions: project.loadDecisions(), clips: clips)
+                    PromptsView(decisions: current.loadDecisions(), clips: clips)
                 case .voiceover:
-                    VoiceoverView(project: project)
+                    VoiceoverView(project: current)
                 case .clips:
                     ClipsGalleryView(
-                        project: project,
+                        project: current,
                         clips: clips,
                         selectedClipID: $selectedClipID
                     )
@@ -59,22 +64,30 @@ struct ProjectDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationTitle(project.manifest.title)
+        .navigationTitle(current.manifest.title)
         .onAppear {
             if selectedClipID == nil { selectedClipID = clips.first?.id }
             store.refreshProjects()
         }
         .onChange(of: project.id) { _, _ in
-            selectedClipID = project.loadClips().first?.id
+            selectedClipID = current.loadClips().first?.id
         }
     }
 
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-                PhaseBadge(phase: project.manifest.phase)
-                if let url = URL(string: project.manifest.blogURL) {
-                    Link(project.manifest.blogURL, destination: url)
+                HStack(spacing: 8) {
+                    PhaseBadge(phase: current.manifest.phase)
+                    languagePicker
+                }
+                if showLanguageHint {
+                    Text("Language updated — Workflow: Regenerate script, then voiceover.")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+                if let url = URL(string: current.manifest.blogURL) {
+                    Link(current.manifest.blogURL, destination: url)
                         .font(.caption)
                         .lineLimit(1)
                 }
@@ -84,7 +97,7 @@ struct ProjectDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    if project.hasVoiceover {
+                    if current.hasVoiceover {
                         Label("Voiceover", systemImage: "waveform")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -93,12 +106,35 @@ struct ProjectDetailView: View {
             }
             Spacer()
             Button {
-                store.revealInFinder(project)
+                store.revealInFinder(current)
             } label: {
                 Label("Show in Finder", systemImage: "folder")
             }
         }
         .padding()
+    }
+
+    private var languagePicker: some View {
+        Picker("Language", selection: languageBinding) {
+            ForEach(ProjectLanguage.allCases, id: \.self) { lang in
+                Text(lang.shortLabel).tag(lang)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 140)
+        .disabled(store.pipeline.isRunning)
+    }
+
+    private var languageBinding: Binding<ProjectLanguage> {
+        Binding(
+            get: { current.manifest.language },
+            set: { newLanguage in
+                let previous = current.manifest.language
+                store.setProjectLanguage(current, language: newLanguage)
+                showLanguageHint = previous != newLanguage
+            }
+        )
     }
 }
 
@@ -135,12 +171,18 @@ struct WorkflowView: View {
                 stepCard(
                     number: 1,
                     title: "Script",
-                    subtitle: "From blog URL (created at project start)",
+                    subtitle: "From blog URL · follows EN / KO / ES setting",
                     done: current.hasScript,
                     active: store.pipeline.runningStep == .generateScript
                 ) {
+                    runButton(
+                        title: current.hasScript ? "Regenerate script" : "Generate script",
+                        enabled: !current.manifest.blogURL.isEmpty
+                    ) {
+                        Task { await run(.generateScript) }
+                    }
                     if current.hasScript {
-                        Text("Ready — see Script tab")
+                        Text("Review in Script tab")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

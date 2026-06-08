@@ -37,6 +37,7 @@ extension ProjectManifest {
                 blogURL: "",
                 createdAt: "",
                 phase: .scriptReview,
+                language: .en,
                 lastError: nil
             )
         )
@@ -57,5 +58,18 @@ extension ProjectManifest {
             }
         }
         return ""
+    }
+
+    static func inferLanguage(from script: String) -> ProjectLanguage {
+        for line in script.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces).lowercased()
+            if t.hasPrefix("# language:") {
+                let code = t.dropFirst("# language:".count).trimmingCharacters(in: .whitespaces)
+                if code.hasPrefix("ko") { return .ko }
+                if code.hasPrefix("es") { return .es }
+                if code.hasPrefix("en") { return .en }
+            }
+        }
+        return .en
     }
 }

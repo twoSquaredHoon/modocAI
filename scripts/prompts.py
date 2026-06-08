@@ -105,3 +105,83 @@ Respond with ONLY valid JSON (no markdown fences):
 Use ids: hook, body_1, body_2, signs_1, signs_2, signs_3, … (one signs_N per warning sign), relief, cta
 (Omit body_2 or signs_N clips only if not in the clip descriptions.)
 """.strip()
+
+SCRIPT_RULES_KO = """
+You are writing a short-form parenting video script for Modoc AI.
+
+RULE: BE MEDICALLY ACCURATE. Use ONLY facts supported by the blog post. Do not invent symptoms, causes, treatments, or statistics. If the blog is unclear on something, omit it rather than guess.
+
+LANGUAGE: Write the entire spoken script in natural Korean (한국어). Short spoken sentences. Parent-friendly tone — not stiff translationese. If the blog is in English, translate faithfully without adding medical claims.
+
+SCRIPT RULES:
+- No medical jargon parents won't understand. Short sentences only. Written to be SPOKEN out loud.
+- Under 45 seconds total when read aloud in Korean.
+- If the blog mentions a specific age or age group, every reference to a child in the script MUST reflect that age. If no age is mentioned, default to school-age children 5–12.
+- When writing each section keep the visuals in mind:
+
+HOOK (0–3 seconds):
+Start with a terrifying but true statement that makes any parent think their child is in danger RIGHT NOW. Use urgent Korean phrasing like "지금 당장 확인하세요", "대부분의 부모는 이걸 모릅니다", "아이에게 조용히 해를 끼치는 습관일 수 있습니다". The hook must feel urgent and personal — not generic. It must still be accurate to the blog.
+
+BODY (3–35 seconds):
+Reveal the problem clearly. Use short punchy sentences. One idea per line. Make the parent feel like they are learning something important. Build tension slightly before releasing it. Stay faithful to the blog.
+When the blog lists warning or emergency signs, include a clear "watch for these signs" beat (e.g. "다만, 이런 위험 신호가 보이면" then short lines listing each sign) before the relief section — this becomes its own visual clip.
+
+RELIEF (35–42 seconds):
+Give clear action steps from the blog. CRITICAL: Do NOT say vague phrases like "그런 증상이 보이면" without naming the signs again. Briefly repeat the warning signs in short form, THEN say what to do (ER now vs doctor today). Parents must hear WHAT triggers ER vs clinic. Stay medically accurate.
+
+CTA (last 3 seconds):
+End with a comment-bait question in Korean like "우리 아이도 이런 적 있나요? 댓글로 알려주세요" or "꼭 봐야 할 부모님 태그해 주세요".
+
+OUTPUT FORMAT (use these exact section labels in English):
+HOOK:
+[spoken lines in Korean]
+
+BODY:
+[spoken lines in Korean]
+
+RELIEF:
+[spoken lines in Korean]
+
+CTA:
+[spoken lines in Korean]
+""".strip()
+
+SCRIPT_RULES_ES = """
+You are writing a short-form parenting video script for Modoc AI.
+
+RULE: BE MEDICALLY ACCURATE. Use ONLY facts supported by the blog post. Do not invent symptoms, causes, treatments, or statistics. If the blog is unclear on something, omit it rather than guess.
+
+LANGUAGE: Write the entire spoken script in natural Spanish (español). Short spoken sentences. Parent-friendly tone — warm and clear, not stiff translationese. If the blog is in English, translate faithfully without adding medical claims. Use Latin American Spanish familiar to U.S. Hispanic parents unless the blog clearly targets Spain.
+
+SCRIPT RULES:
+- No medical jargon parents won't understand. Short sentences only. Written to be SPOKEN out loud.
+- Under 45 seconds total when read aloud in Spanish.
+- If the blog mentions a specific age or age group, every reference to a child in the script MUST reflect that age. If no age is mentioned, default to school-age children 5–12.
+- When writing each section keep the visuals in mind:
+
+HOOK (0–3 seconds):
+Start with a terrifying but true statement that makes any parent think their child is in danger RIGHT NOW. Use urgent Spanish phrasing like "Si tu hijo hace esto, detente ahora", "La mayoría de los padres no sabe que esto le está pasando a su hijo", "Este hábito cotidiano podría estar dañando a tu niño en silencio". The hook must feel urgent and personal — not generic. It must still be accurate to the blog.
+
+BODY (3–35 seconds):
+Reveal the problem clearly. Use short punchy sentences. One idea per line. Make the parent feel like they are learning something important. Build tension slightly before releasing it. Stay faithful to the blog.
+When the blog lists warning or emergency signs, include a clear "watch for these signs" beat (e.g. "Pero, estate atento a estas señales de alarma" then short lines listing each sign) before the relief section — this becomes its own visual clip.
+
+RELIEF (35–42 seconds):
+Give clear action steps from the blog. CRITICAL: Do NOT say vague phrases like "si ves estos síntomas" without naming the signs again. Briefly repeat the warning signs in short form, THEN say what to do (ER now vs doctor today). Parents must hear WHAT triggers ER vs clinic. Stay medically accurate.
+
+CTA (last 3 seconds):
+End with a comment-bait question in Spanish like "¿Tu hijo alguna vez ha hecho esto? Cuéntanos en los comentarios" or "Etiqueta a un padre que necesita ver esto".
+
+OUTPUT FORMAT (use these exact section labels in English):
+HOOK:
+[spoken lines in Spanish]
+
+BODY:
+[spoken lines in Spanish]
+
+RELIEF:
+[spoken lines in Spanish]
+
+CTA:
+[spoken lines in Spanish]
+""".strip()

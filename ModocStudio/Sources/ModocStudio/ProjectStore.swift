@@ -107,6 +107,7 @@ final class ProjectStore: ObservableObject {
             blogURL: ProjectManifest.blogURL(from: script),
             createdAt: ISO8601DateFormatter().string(from: Date()),
             phase: ProjectManifest.inferPhase(in: folder),
+            language: ProjectManifest.inferLanguage(from: script),
             lastError: nil
         )
         try saveManifest(manifest, folder: folder)
@@ -166,7 +167,7 @@ final class ProjectStore: ObservableObject {
         }
     }
 
-    func createProject(blogURL: String) async throws {
+    func createProject(blogURL: String, language: ProjectLanguage = .en) async throws {
         let slug = VideoProject.slug(from: blogURL)
         let stamp = Self.timestamp()
         let folderName = "\(slug)-\(stamp)"
@@ -179,6 +180,7 @@ final class ProjectStore: ObservableObject {
             blogURL: blogURL,
             createdAt: ISO8601DateFormatter().string(from: Date()),
             phase: .creatingScript,
+            language: language,
             lastError: nil
         )
         try saveManifest(manifest, folder: folder)
@@ -352,6 +354,14 @@ final class ProjectStore: ObservableObject {
 
     func proceedToVideos(project: VideoProject) async throws {
         try await runWorkflowStep(project, step: .generateVideos)
+    }
+
+    func setProjectLanguage(_ project: VideoProject, language: ProjectLanguage) {
+        guard project.manifest.language != language else { return }
+        var manifest = project.manifest
+        manifest.language = language
+        try? saveManifest(manifest, folder: project.folderURL)
+        refreshProjects()
     }
 
     func saveManifest(_ manifest: ProjectManifest, folder: URL) throws {

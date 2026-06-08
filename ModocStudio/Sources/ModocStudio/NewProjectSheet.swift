@@ -6,6 +6,7 @@ struct NewProjectSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var urlText = ""
+    @State private var language: ProjectLanguage = .en
     @State private var errorMessage: String?
     @State private var isCreating = false
     @State private var focusField = true
@@ -18,6 +19,23 @@ struct NewProjectSheet: View {
             Text("Paste a FeverCoach blog URL. The script generates automatically; you review before clip prompts and videos.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Language")
+                    .font(.subheadline.weight(.medium))
+
+                Picker("Language", selection: $language) {
+                    ForEach(ProjectLanguage.allCases, id: \.self) { lang in
+                        Text(lang.displayName).tag(lang)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(isCreating)
+
+                Text("Script and voiceover are generated in this language. Clip videos stay English prompts for Veo.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Blog URL")
@@ -108,7 +126,7 @@ struct NewProjectSheet: View {
         }
 
         do {
-            try await store.createProject(blogURL: url)
+            try await store.createProject(blogURL: url, language: language)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

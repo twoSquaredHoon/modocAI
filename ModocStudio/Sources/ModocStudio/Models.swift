@@ -12,12 +12,35 @@ enum ProjectPhase: String, Codable {
     case failed
 }
 
+enum ProjectLanguage: String, Codable, CaseIterable, Hashable {
+    case en
+    case ko
+    case es
+
+    var displayName: String {
+        switch self {
+        case .en: return "English"
+        case .ko: return "한국어 (Korean)"
+        case .es: return "Español (Spanish)"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .en: return "EN"
+        case .ko: return "KO"
+        case .es: return "ES"
+        }
+    }
+}
+
 struct ProjectManifest: Codable, Hashable {
     var id: String
     var title: String
     var blogURL: String
     var createdAt: String
     var phase: ProjectPhase
+    var language: ProjectLanguage
     var lastError: String?
 
     enum CodingKeys: String, CodingKey {
@@ -25,7 +48,37 @@ struct ProjectManifest: Codable, Hashable {
         case blogURL = "blog_url"
         case createdAt = "created_at"
         case phase
+        case language
         case lastError = "last_error"
+    }
+
+    init(
+        id: String,
+        title: String,
+        blogURL: String,
+        createdAt: String,
+        phase: ProjectPhase,
+        language: ProjectLanguage = .en,
+        lastError: String?
+    ) {
+        self.id = id
+        self.title = title
+        self.blogURL = blogURL
+        self.createdAt = createdAt
+        self.phase = phase
+        self.language = language
+        self.lastError = lastError
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        blogURL = try container.decode(String.self, forKey: .blogURL)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        phase = try container.decode(ProjectPhase.self, forKey: .phase)
+        language = try container.decodeIfPresent(ProjectLanguage.self, forKey: .language) ?? .en
+        lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
     }
 }
 
