@@ -6,7 +6,21 @@ import json
 import re
 from pathlib import Path
 
+from visual_cast import VisualCast, get_visual_cast, language_from_script_header
+
 SIGNS_CLIP_SECONDS = 4
+
+SIGNS_INTRO_RE = re.compile(
+    r"(?:watch for|warning signs?|serious signs?|danger signs?|"
+    r"위험\s*신호|위험신호|이런\s*위험|"
+    r"señales?\s+de\s+alarma|signos?\s+de\s+alarma|"
+    r"다만.*(?:신호|병원|위험))",
+    re.I,
+)
+
+
+def _is_signs_intro(line: str) -> bool:
+    return bool(SIGNS_INTRO_RE.search(line))
 
 
 def signs_clip_id(index: int) -> str:
@@ -23,54 +37,82 @@ def clip_sort_key(clip_id: str) -> tuple:
     if clip_id.startswith("body_"):
         num = clip_id.split("_", 1)[-1]
         return (1, int(num) if num.isdigit() else 0)
-    if clip_id.startswith("signs_"):
+    if clip_id.startswith("explain_"):
         num = clip_id.split("_", 1)[-1]
         return (2, int(num) if num.isdigit() else 0)
+    if clip_id.startswith("signs_"):
+        num = clip_id.split("_", 1)[-1]
+        return (3, int(num) if num.isdigit() else 0)
     if clip_id == "signs":
-        return (2, 0)
-    if clip_id == "relief":
         return (3, 0)
-    if clip_id == "cta":
+    if clip_id == "relief":
         return (4, 0)
+    if clip_id == "cta":
+        return (5, 0)
     return (99, 0)
 
 
-def bullet_to_visual(line: str, *, child_age: str = "6-year-old") -> str:
+def bullet_to_visual(line: str, *, child_description: str, cast: VisualCast) -> str:
     """Map a script warning line to one presentation visual (no text)."""
     low = line.lower()
+    infant = cast.age.is_infant
+
     if "breath" in low:
+        if infant:
+            return (
+                f"{child_description} lying in a crib on their back with visible rapid "
+                f"belly breathing, chest rising and falling quickly"
+            )
         return (
-            f"a {child_age} child sitting upright with visible rapid breathing, "
+            f"{child_description} sitting upright with visible rapid breathing, "
             f"chest rising and falling quickly"
         )
     if "urinat" in low or "diaper" in low or "pee" in low:
         return (
             f"a dry unused diaper beside a simple wall clock, suggesting no urination "
             f"for many hours"
+            + (
+                f" ({child_description} nearby on changing table)"
+                if infant
+                else f" (same child from cast if shown nearby: {child_description})"
+            )
         )
     if "tear" in low or "dry lip" in low or "crying" in low:
+        if infant:
+            return (
+                f"close-up of {child_description} in parent's arms with visibly dry "
+                f"cracked lips and no tears on the cheeks while fussing weakly"
+            )
         return (
-            f"a close-up of a {child_age} child's face with visibly dry cracked lips "
+            f"close-up of {child_description} with visibly dry cracked lips "
             f"and no tears on the cheeks"
         )
     if "belly" in low or "stomach" in low or "touched" in low or "pain" in low:
+        if infant:
+            return (
+                f"{child_description} lying on a changing table with knees bent, "
+                f"wincing as a parent's hand gently touches the stomach"
+            )
         return (
-            f"a {child_age} child lying on their back with both hands on their belly, "
+            f"{child_description} lying on their back with both hands on their belly, "
             f"wincing slightly as a parent's hand gently touches the stomach"
         )
     if "wake" in low or "letharg" in low or "rous" in low:
+        if infant:
+            return (
+                f"{child_description} asleep in a crib while a parent gently strokes "
+                f"the cheek and the baby does not wake or open eyes"
+            )
         return (
-            f"a {child_age} child asleep on a pillow while a parent gently taps the "
+            f"{child_description} asleep on a pillow while a parent gently taps the "
             f"shoulder and the child does not wake"
         )
-    return f"a simple health-warning visual suggesting: {line[:80]}"
+    return f"a simple health-warning visual for {cast.age.label} suggesting: {line[:80]}"
 
 
-def extract_child_age(script: str) -> str:
-    match = re.search(r"(\d+)[\s-]*year[\s-]*old", script, re.I)
-    if match:
-        return f"{match.group(1)}-year-old"
-    return "school-age"
+def _resolve_cast(script: str, language: str | None) -> VisualCast:
+    lang = language or language_from_script_header(script) or "en"
+    return get_visual_cast(lang, script)
 
 
 def _split_sign_sentences(text: str) -> list[str]:
@@ -133,8 +175,12 @@ def extract_warning_bullets(script: str) -> list[str]:
             capturing = False
             continue
         if re.match(r"^\*\*.*\*\*$", line):
-            if re.search(r"watch for|warning sign|serious sign", line, re.I):
+            if _is_signs_intro(line):
                 capturing = True
+            continue
+        if _is_signs_intro(line):
+            capturing = True
+            bullets.extend(_inline_signs_from_line(line))
             continue
         if re.search(r"watch for|warning sign|serious sign", line, re.I):
             capturing = True
@@ -152,9 +198,9 @@ def extract_warning_bullets(script: str) -> list[str]:
 
 
 def build_one_signs_clip(
-    index: int, bullet: str, *, child_age: str
+    index: int, bullet: str, *, cast: VisualCast
 ) -> dict:
-    visual = bullet_to_visual(bullet, child_age=child_age)
+    visual = bullet_to_visual(bullet, child_description=cast.child, cast=cast)
     clip_id = signs_clip_id(index)
     label = f"SIGNS CLIP {index}"
 
@@ -164,6 +210,7 @@ def build_one_signs_clip(
         "Soft warm off-white background, one centered rounded card filling most of the frame, "
         "static camera, even bright lighting, tense-but-clear mood. "
         f"The card shows only this one realistic image: {visual}. "
+        f"Cast consistency: {cast.child} "
         "Clean minimalist slide look, not graphic, not a medical diagram. "
         f"{SIGNS_CLIP_SECONDS} seconds."
     )
@@ -189,86 +236,61 @@ def build_one_signs_clip(
     }
 
 
-def build_signs_clips_list(bullets: list[str], *, child_age: str) -> list[dict]:
+def build_signs_clips_list(bullets: list[str], *, cast: VisualCast) -> list[dict]:
     if not bullets:
         return []
     return [
-        build_one_signs_clip(i, bullet, child_age=child_age)
+        build_one_signs_clip(i, bullet, cast=cast)
         for i, bullet in enumerate(bullets, start=1)
     ]
 
 
-def format_signs_decision_lines(bullets: list[str], *, child_age: str) -> list[str]:
+def format_signs_decision_lines(bullets: list[str], *, cast: VisualCast) -> list[str]:
     lines = []
     for i, bullet in enumerate(bullets, start=1):
-        visual = bullet_to_visual(bullet, child_age=child_age)
+        visual = bullet_to_visual(bullet, child_description=cast.child, cast=cast)
         lines.append(f"SIGNS CLIP {i}: {visual}")
     return lines
 
 
-def merge_signs_clips_into_list(script: str, clips: list[dict]) -> list[dict]:
+def merge_signs_clips_into_list(
+    script: str, clips: list[dict], *, language: str | None = None
+) -> list[dict]:
     """Replace any single 'signs' clip with signs_1..signs_N from the script."""
     bullets = extract_warning_bullets(script)
+    cast = _resolve_cast(script, language)
     other = [c for c in clips if not is_signs_clip_id(str(c.get("id", "")))]
-    signs_clips = build_signs_clips_list(bullets, child_age=extract_child_age(script))
+    signs_clips = build_signs_clips_list(bullets, cast=cast)
     merged = other + signs_clips
     merged.sort(key=lambda c: clip_sort_key(str(c["id"])))
     return merged
 
 
-def update_signs_in_folder(clips_dir: Path, script_path: Path) -> list[str]:
+def update_signs_in_folder(
+    clips_dir: Path, script_path: Path, *, language: str | None = None
+) -> list[str]:
     """Write signs_1..signs_N into clips.json; return clip ids."""
-    script = script_path.read_text(encoding="utf-8")
-    bullets = extract_warning_bullets(script)
-    child_age = extract_child_age(script)
-    signs_clips = build_signs_clips_list(bullets, child_age=child_age)
+    from derived_clips import sync_derived_in_folder
 
-    clips_json = clips_dir / "clips.json"
-    if clips_json.is_file():
-        data = json.loads(clips_json.read_text(encoding="utf-8"))
-        clips = [
-            c
-            for c in data.get("clips", [])
-            if not is_signs_clip_id(str(c.get("id", "")))
-        ]
-    else:
-        data = {}
-        clips = []
-
-    clips.extend(signs_clips)
-    clips.sort(key=lambda c: clip_sort_key(str(c["id"])))
-    data["clips"] = clips
-    clips_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-
-    decisions_path = clips_dir / "clip_decisions.txt"
-    if decisions_path.is_file():
-        text = decisions_path.read_text(encoding="utf-8")
-        text = re.sub(
-            r"^SIGNS CLIP(?: \d+)?:.*\n", "", text, flags=re.MULTILINE | re.IGNORECASE
-        )
-        text = re.sub(r"^signs_\d+.*\n", "", text, flags=re.MULTILINE | re.IGNORECASE)
-        insert_lines = format_signs_decision_lines(bullets, child_age=child_age)
-        if "RELIEF CLIP:" in text:
-            text = text.replace(
-                "RELIEF CLIP:",
-                "\n".join(insert_lines) + "\nRELIEF CLIP:",
-                1,
-            )
-        else:
-            text = text.rstrip() + "\n" + "\n".join(insert_lines) + "\n"
-        decisions_path.write_text(text, encoding="utf-8")
-
-    print(f"Updated {clips_json} with {len(signs_clips)} signs clip(s)")
-    for clip in signs_clips:
-        print(f"  {clip['id']}: {clip.get('script_line', '')[:60]}")
-    return [c["id"] for c in signs_clips]
+    _, signs_ids = sync_derived_in_folder(
+        clips_dir, script_path, language=language
+    )
+    return signs_ids
 
 
 if __name__ == "__main__":
+    import argparse
     import sys
 
-    if len(sys.argv) != 3:
-        print("Usage: python scripts/signs_clip_prompt.py <clips_dir> <script.txt>")
-        sys.exit(1)
-    ids = update_signs_in_folder(Path(sys.argv[1]), Path(sys.argv[2]))
+    parser = argparse.ArgumentParser(description="Refresh signs clips in a project folder.")
+    parser.add_argument("clips_dir", type=Path)
+    parser.add_argument("script", type=Path)
+    parser.add_argument(
+        "--language",
+        choices=["en", "ko", "es"],
+        default=None,
+        help="Cast ethnicity/market (default: from script header)",
+    )
+    args = parser.parse_args()
+    ids = update_signs_in_folder(args.clips_dir, args.script, language=args.language)
     print("Clip ids:", ", ".join(ids))

@@ -191,7 +191,7 @@ struct WorkflowView: View {
                 stepCard(
                     number: 2,
                     title: "Clip prompts",
-                    subtitle: "Decisions + Veo prompts (no video cost)",
+                    subtitle: "Decisions + Veo prompts with consistent cast (matches EN/KO/ES)",
                     done: current.hasClipsJSON,
                     active: store.pipeline.runningStep == .generatePrompts
                 ) {
@@ -230,6 +230,7 @@ struct WorkflowView: View {
                     done: videosComplete,
                     active: store.pipeline.runningStep == .generateVideos
                         || isRegeneratingAnyClip
+                        || store.pipeline.runningStep == .regenerateAllClips
                 ) {
                     runButton(
                         title: videoButtonTitle,
@@ -326,6 +327,7 @@ struct WorkflowView: View {
 
     private var isRegeneratingAnyClip: Bool {
         if case .regenerateClip = store.pipeline.runningStep { return true }
+        if store.pipeline.runningStep == .regenerateAllClips { return true }
         return false
     }
 }

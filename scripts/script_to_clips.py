@@ -14,13 +14,14 @@ from google.genai import types
 
 from gemini_util import PROJECT_ROOT, get_client
 from path_hints import format_script_not_found
-from prompts import CLIP_DECISION_PROMPT, CLIP_DETAIL_JSON_INSTRUCTION
+from prompts import clip_decision_prompt, clip_detail_json_instruction
+from derived_clips import apply_derived_clips, format_clip_prompts_text
+from explain_clip_prompt import is_explain_clip_id
 from signs_clip_prompt import (
     clip_sort_key,
     is_signs_clip_id,
-    merge_signs_clips_into_list,
-    update_signs_in_folder,
 )
+from visual_cast import get_visual_cast, language_from_script_header
 from veo_util import generate_video
 
 TEXT_MODEL = "gemini-2.5-flash"
@@ -125,24 +126,35 @@ def run_gemini_text(
     raise RuntimeError(last_error)
 
 
-def decide_clips(client, script: str, *, model: str) -> str:
+def decide_clips(
+    client, script: str, *, model: str, cast_bible: str
+) -> str:
     print("Step 1/3: Deciding what clips are needed...")
-    user = f"{CLIP_DECISION_PROMPT}\n\nSCRIPT:\n---\n{script}\n---"
+    user = f"{clip_decision_prompt(cast_bible)}\n\nSCRIPT:\n---\n{script}\n---"
     return run_gemini_text(
         client,
         model=model,
         user=user,
-        system="You plan visuals for short parenting videos. Stay faithful to the script.",
+        system=(
+            "You plan visuals for short parenting videos. Stay faithful to the script. "
+            "Use the visual cast bible for every person shown. "
+            "Child age from the cast bible is mandatory — infants must look like infants."
+        ),
     )
 
 
-SINGLE_CLIP_PROMPT = """
+def single_clip_prompt(cast_bible: str) -> str:
+    return f"""
 You write one AI video generation prompt for a parenting health video clip.
+
+{cast_bible}
+
 Output valid JSON only:
-{"id": "...", "label": "...", "detailed_prompt": "...", "veo_prompt": "...", "duration_seconds": 6}
+{{"id": "...", "label": "...", "detailed_prompt": "...", "veo_prompt": "...", "duration_seconds": 6}}
 
 Rules for veo_prompt: one paragraph, cinematic realistic 4K, natural colors, no text on screen
-(except SIGNS clip), specific ages and physical details where people appear, no vague words.
+(except SIGNS clip), copy exact child/parent appearance AND EXACT AGE from the cast bible,
+open veo_prompt with the child's age (e.g. "7-month-old infant baby"), no vague words.
 duration_seconds: 4 for hook and cta; 6 for body_1, body_2, signs, relief.
 SIGNS clips (signs_1, signs_2, …): one clip per warning sign; each is a single wordless
 presentation image on a clean background; no text on screen.
@@ -155,6 +167,7 @@ def parse_clip_decisions(clip_decisions: str) -> list[tuple[str, str, str]]:
         (r"^HOOK CLIP:\s*(.+)$", "hook", "HOOK CLIP"),
         (r"^BODY CLIP 1:\s*(.+)$", "body_1", "BODY CLIP 1"),
         (r"^BODY CLIP 2:\s*(.+)$", "body_2", "BODY CLIP 2"),
+        (r"^EXPLAIN CLIP (\d+):\s*(.+)$", "explain", "EXPLAIN CLIP"),
         (r"^SIGNS CLIP (\d+):\s*(.+)$", "signs", "SIGNS CLIP"),
         (r"^RELIEF CLIP:\s*(.+)$", "relief", "RELIEF CLIP"),
         (r"^CTA CLIP:\s*(.+)$", "cta", "CTA CLIP"),
@@ -170,6 +183,9 @@ def parse_clip_decisions(clip_decisions: str) -> list[tuple[str, str, str]]:
                 if clip_id == "signs" and label == "SIGNS CLIP" and match.lastindex == 2:
                     n = match.group(1)
                     found.append((f"signs_{n}", f"SIGNS CLIP {n}", match.group(2).strip()))
+                elif clip_id == "explain" and label == "EXPLAIN CLIP" and match.lastindex == 2:
+                    n = match.group(1)
+                    found.append((f"explain_{n}", f"EXPLAIN CLIP {n}", match.group(2).strip()))
                 else:
                     found.append((clip_id, label, match.group(1).strip()))
                 break
@@ -177,7 +193,7 @@ def parse_clip_decisions(clip_decisions: str) -> list[tuple[str, str, str]]:
 
 
 def default_duration(clip_id: str) -> int:
-    if clip_id in ("hook", "cta") or is_signs_clip_id(clip_id):
+    if clip_id in ("hook", "cta") or is_signs_clip_id(clip_id) or is_explain_clip_id(clip_id):
         return 4
     return 6
 
@@ -212,13 +228,18 @@ def parse_clips_json(raw: str) -> list[dict]:
 
 
 def build_veo_prompts_one_by_one(
-    client, parsed: list[tuple[str, str, str]], *, model: str
+    client,
+    parsed: list[tuple[str, str, str]],
+    *,
+    model: str,
+    cast_bible: str,
 ) -> list[dict]:
     print("  Using per-clip prompt generation (fallback)...")
     validated: list[dict] = []
+    prompt_template = single_clip_prompt(cast_bible)
     for clip_id, label, description in parsed:
         user = (
-            f"{SINGLE_CLIP_PROMPT}\n\n"
+            f"{prompt_template}\n\n"
             f'id="{clip_id}" label="{label}"\n'
             f"Clip description: {description}"
         )
@@ -234,10 +255,12 @@ def build_veo_prompts_one_by_one(
     return validated
 
 
-def build_veo_prompts(client, clip_decisions: str, *, model: str) -> list[dict]:
+def build_veo_prompts(
+    client, clip_decisions: str, *, model: str, cast_bible: str
+) -> list[dict]:
     print("Step 2/3: Writing detailed video prompts...")
     user = (
-        f"{CLIP_DETAIL_JSON_INSTRUCTION}\n\n"
+        f"{clip_detail_json_instruction(cast_bible)}\n\n"
         f"CLIP DESCRIPTIONS:\n---\n{clip_decisions}\n---"
     )
     try:
@@ -245,7 +268,11 @@ def build_veo_prompts(client, clip_decisions: str, *, model: str) -> list[dict]:
             client,
             model=model,
             user=user,
-            system="You write precise AI video prompts. Output valid JSON only.",
+            system=(
+                "You write precise AI video prompts. Output valid JSON only. "
+                "Every person must match the visual cast bible exactly. "
+                "State the child's exact age in every veo_prompt opening sentence."
+            ),
             json_mode=True,
             max_retries=3,
         )
@@ -257,7 +284,9 @@ def build_veo_prompts(client, clip_decisions: str, *, model: str) -> list[dict]:
             raise RuntimeError(
                 "Could not parse clip decisions and batch JSON failed."
             ) from exc
-        validated = build_veo_prompts_one_by_one(client, parsed, model=model)
+        validated = build_veo_prompts_one_by_one(
+            client, parsed, model=model, cast_bible=cast_bible
+        )
 
     print(f"  Planned {len(validated)} clips: {', '.join(c['id'] for c in validated)}")
     return validated
@@ -299,21 +328,19 @@ def save_prompt_artifacts(
     script: str,
     clip_decisions: str,
     clips: list[dict],
+    cast_bible: str = "",
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "script.txt").write_text(script + "\n", encoding="utf-8")
     (out_dir / "clip_decisions.txt").write_text(clip_decisions + "\n", encoding="utf-8")
+    if cast_bible:
+        (out_dir / "visual_cast.txt").write_text(cast_bible + "\n", encoding="utf-8")
 
     clips = sorted(clips, key=lambda c: clip_sort_key(str(c.get("id", ""))))
 
-    lines = ["# Clip prompts\n"]
-    for clip in clips:
-        lines.append(f"## {clip['label']} ({clip['id']})\n\n")
-        lines.append(prompt_to_text(clip.get("detailed_prompt")))
-        lines.append("\n\n**Veo prompt:**\n\n")
-        lines.append(prompt_to_text(clip.get("veo_prompt")))
-        lines.append("\n\n")
-    (out_dir / "clip_prompts.txt").write_text("".join(lines), encoding="utf-8")
+    (out_dir / "clip_prompts.txt").write_text(
+        format_clip_prompts_text(clips), encoding="utf-8"
+    )
     (out_dir / "clips.json").write_text(
         json.dumps({"clips": clips}, indent=2) + "\n", encoding="utf-8"
     )
@@ -454,6 +481,12 @@ def main() -> None:
         help="Retries per clip when Veo returns no video (default: 2)",
     )
     parser.add_argument(
+        "--language",
+        default=None,
+        choices=["en", "ko", "es"],
+        help="Target audience for cast appearance (default: script # Language: header, else en)",
+    )
+    parser.add_argument(
         "--only",
         metavar="CLIP_ID",
         help="Generate one clip id, or 'signs' for all signs_1, signs_2, …. Requires --resume.",
@@ -532,22 +565,46 @@ def main() -> None:
                     if args.output_dir
                     else output_dir_for_script(script_path)
                 )
+                script_raw = script_path.read_text(encoding="utf-8")
                 script = load_script(script_path)
+                language = args.language or language_from_script_header(script_raw) or "en"
+                cast = get_visual_cast(language, script_raw)
+                cast_bible = cast.format_bible()
+                print(f"  Visual cast: {cast.market}")
+                (out_dir / "visual_cast.txt").write_text(cast_bible + "\n", encoding="utf-8")
+
                 out_dir.mkdir(parents=True, exist_ok=True)
-                clip_decisions = decide_clips(client, script, model=args.text_model)
+                clip_decisions = decide_clips(
+                    client, script, model=args.text_model, cast_bible=cast_bible
+                )
+                clip_decisions, _preview = apply_derived_clips(
+                    script_raw,
+                    clip_decisions,
+                    [],
+                    language=language,
+                )
                 (out_dir / "clip_decisions.txt").write_text(
                     clip_decisions + "\n", encoding="utf-8"
                 )
                 try:
                     clips = build_veo_prompts(
-                        client, clip_decisions, model=args.text_model
+                        client,
+                        clip_decisions,
+                        model=args.text_model,
+                        cast_bible=cast_bible,
                     )
-                    clips = merge_signs_clips_into_list(script, clips)
+                    clip_decisions, clips = apply_derived_clips(
+                        script_raw,
+                        clip_decisions,
+                        clips,
+                        language=language,
+                    )
                     save_prompt_artifacts(
                         out_dir,
                         script=script,
                         clip_decisions=clip_decisions,
                         clips=clips,
+                        cast_bible=cast_bible,
                     )
                     print(f"\nPrompts saved under {out_dir}")
                 except Exception:

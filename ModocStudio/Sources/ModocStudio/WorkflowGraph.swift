@@ -85,6 +85,7 @@ struct WorkflowGraphManager {
 
         let artifactNames = [
             "script.txt", "clip_decisions.txt", "clip_prompts.txt", "clips.json",
+            "visual_cast.txt",
             "voiceover.wav", "speech.txt", "voiceover_meta.json",
         ]
         for name in artifactNames {
@@ -111,6 +112,7 @@ struct WorkflowGraphManager {
 
         let artifactNames = [
             "script.txt", "clip_decisions.txt", "clip_prompts.txt", "clips.json",
+            "visual_cast.txt",
             "voiceover.wav", "speech.txt", "voiceover_meta.json",
         ]
         for name in artifactNames {

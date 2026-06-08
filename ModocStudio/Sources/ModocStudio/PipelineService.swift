@@ -42,11 +42,16 @@ final class PipelineService: ObservableObject {
                     project.scriptURL.path,
                     "--output-dir", project.folderURL.path,
                     "--prompts-only",
+                    "--language", project.manifest.language.rawValue,
                 ]
             )
             try await runPython(
-                script: "scripts/signs_clip_prompt.py",
-                args: [project.folderURL.path, project.scriptURL.path]
+                script: "scripts/derived_clips.py",
+                args: [
+                    project.folderURL.path,
+                    project.scriptURL.path,
+                    "--language", project.manifest.language.rawValue,
+                ]
             )
         case .generateVideos:
             try await runPython(
@@ -67,6 +72,11 @@ final class PipelineService: ObservableObject {
             try await runPython(
                 script: "scripts/script_to_clips.py",
                 args: ["--resume", project.folderURL.path, "--only", clipId]
+            )
+        case .regenerateAllClips:
+            try await runPython(
+                script: "scripts/script_to_clips.py",
+                args: ["--resume", project.folderURL.path]
             )
         }
 
@@ -91,6 +101,7 @@ final class PipelineService: ObservableObject {
         case generateVoiceover
         case generateVideos
         case regenerateClip(String)
+        case regenerateAllClips
 
         var title: String {
             switch self {
@@ -99,6 +110,7 @@ final class PipelineService: ObservableObject {
             case .generateVoiceover: return "Script → Voiceover"
             case .generateVideos: return "Generate Veo videos"
             case .regenerateClip(let id): return "Regenerate clip: \(id)"
+            case .regenerateAllClips: return "Regenerate all clips"
             }
         }
     }

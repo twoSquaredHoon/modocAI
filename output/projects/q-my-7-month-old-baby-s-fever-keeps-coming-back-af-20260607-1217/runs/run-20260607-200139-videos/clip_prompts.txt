@@ -1,0 +1,71 @@
+# Clip prompts
+## HOOK CLIP (hook)
+
+SUBJECT: A 7-month-old infant baby (East Asian Korean features, dark brown eyes, warm light skin tone, wearing a soft white and mint-green footed baby onesie, large head, chubby cheeks, sparse fine hair, cannot walk or stand) and a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment nursery, clean neutral interior, soft blankets in a crib.
+ACTION: Woman gently wipes the infant's forehead with a damp cloth, while the infant lies in a crib.
+MOOD: Tense
+CAMERA: Gentle handheld
+LIGHTING: Dark and moody
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an East Asian Korean infant with dark brown eyes, warm light skin tone, large head, chubby cheeks, sparse fine hair, and wearing a soft white and mint-green footed baby onesie, lies in a crib in a modern Korean apartment nursery with clean neutral interior and soft blankets. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, and wearing a cream-colored loungewear top, gently wipes the infant's forehead with a damp cloth. The mood is Tense. The camera uses a gentle handheld shot with dark and moody lighting. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.
+
+## BODY CLIP 1 (body_1)
+
+SUBJECT: A 7-month-old infant baby (East Asian Korean features, dark brown eyes, warm light skin tone, wearing a soft white and mint-green footed baby onesie, large head, chubby cheeks, sparse fine hair, cannot walk or stand) and a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment nursery, clean neutral interior, soft blankets in a crib.
+ACTION: Woman gently touches the infant's forehead with a concerned expression, while the infant lies in a crib.
+MOOD: Tense
+CAMERA: Static shot
+LIGHTING: Neutral
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an East Asian Korean infant with dark brown eyes, warm light skin tone, large head, chubby cheeks, sparse fine hair, and wearing a soft white and mint-green footed baby onesie, lies in a crib in a modern Korean apartment nursery with clean neutral interior and soft blankets. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, and wearing a cream-colored loungewear top, gently touches the infant's forehead with a concerned expression. The mood is Tense. The camera uses a static shot with neutral lighting. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.
+
+## BODY CLIP 2 (body_2)
+
+SUBJECT: A 7-month-old infant baby (East Asian Korean features, dark brown eyes, warm light skin tone, wearing a soft white and mint-green footed baby onesie, large head, chubby cheeks, sparse fine hair, cannot walk or stand) and a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment, clean neutral interior, soft daylight.
+ACTION: Woman gently feeds the infant a bottle while the infant is dressed in light clothing.
+MOOD: Tense
+CAMERA: Slow zoom in
+LIGHTING: Neutral
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an East Asian Korean infant with dark brown eyes, warm light skin tone, large head, chubby cheeks, sparse fine hair, and wearing a soft white and mint-green footed baby onesie, is gently fed a bottle by a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, and wearing a cream-colored loungewear top. The infant is dressed in light clothing in a modern Korean apartment with a clean neutral interior and soft daylight. The mood is Tense. The camera uses a slow zoom in with neutral lighting. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.
+
+## RELIEF CLIP (relief)
+
+SUBJECT: A 7-month-old infant baby (East Asian Korean features, dark brown eyes, warm light skin tone, wearing a soft white and mint-green footed baby onesie, large head, chubby cheeks, sparse fine hair, cannot walk or stand) and a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Pediatrician's waiting room, clean and modern.
+ACTION: Woman holds the infant while sitting in the waiting room.
+MOOD: Relieved
+CAMERA: Static shot
+LIGHTING: Bright and warm
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an East Asian Korean infant with dark brown eyes, warm light skin tone, large head, chubby cheeks, sparse fine hair, and wearing a soft white and mint-green footed baby onesie, is held by a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, and wearing a cream-colored loungewear top. They are sitting in a clean and modern pediatrician's waiting room. The mood is Relieved. The camera uses a static shot with bright and warm lighting. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.
+
+## CTA CLIP (cta)
+
+SUBJECT: A 7-month-old infant baby (East Asian Korean features, dark brown eyes, warm light skin tone, wearing a soft white and mint-green footed baby onesie, large head, chubby cheeks, sparse fine hair, cannot walk or stand) and a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment nursery, clean neutral interior, soft daylight.
+ACTION: Woman gently smiles at the infant who is happily playing with a soft toy. Both look towards the camera.
+MOOD: Warm
+CAMERA: Static shot
+LIGHTING: Bright and warm
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an East Asian Korean infant with dark brown eyes, warm light skin tone, large head, chubby cheeks, sparse fine hair, and wearing a soft white and mint-green footed baby onesie, is happily playing with a soft toy in a modern Korean apartment nursery with a clean neutral interior and soft daylight. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, and wearing a cream-colored loungewear top, gently smiles at the infant. Both look towards the camera. The mood is Warm. The camera uses a static shot with bright and warm lighting. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.
+

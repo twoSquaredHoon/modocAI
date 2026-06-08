@@ -1,0 +1,131 @@
+# Clip prompts
+## HOOK CLIP (hook)
+
+SUBJECT: A 7-month-old infant baby, East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment nursery, clean neutral interior, soft daylight, minimal clutter, crib.
+ACTION: The woman looks worriedly at the baby lying in the crib, appearing slightly flushed.
+MOOD: Tense
+CAMERA: Gentle handheld
+LIGHTING: Dark and moody
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an infant with East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie, lies in a crib, appearing slightly flushed. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top, looks worriedly at the baby. The setting is a modern Korean apartment nursery with clean neutral interior, soft daylight, and minimal clutter. Gentle handheld shot, dark and moody lighting. Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+## BODY CLIP 1 (body_1)
+
+SUBJECT: A 7-month-old infant baby, East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment nursery, clean neutral interior, soft daylight, minimal clutter, changing table.
+ACTION: The woman gently places the back of her hand on the baby's forehead, looking concerned. The baby is lying on the changing table.
+MOOD: Tense
+CAMERA: Slow zoom in
+LIGHTING: Neutral
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an infant with East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie, lies on a changing table. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top, gently places the back of her hand on the baby's forehead, looking concerned. The setting is a modern Korean apartment nursery with clean neutral interior, soft daylight, and minimal clutter. Slow zoom in shot, neutral lighting. Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+## BODY CLIP 2 (body_2)
+
+SUBJECT: A 7-month-old infant baby, East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Modern Korean apartment bathroom, clean neutral interior, soft daylight, minimal clutter, basin.
+ACTION: The woman holds the baby over a basin of lukewarm water, but then pauses and pulls the baby away, looking thoughtful.
+MOOD: Tense
+CAMERA: Static shot
+LIGHTING: Neutral
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an infant with East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie, is held by a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top. The woman holds the baby over a basin of lukewarm water in a modern Korean apartment bathroom, then pauses and pulls the baby away, looking thoughtful. Static shot, neutral lighting. Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+## EXPLAIN CLIP 1 (explain_1)
+
+SUBJECT: A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms.; a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression.
+SETTING: Modern Korean apartment or home — clean neutral interior, soft daylight, minimal clutter, no readable text on walls For this infant: nursery with crib, changing table, soft blankets, or parent holding baby — never a school classroom or playground for older kids.
+ACTION: a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression carefully giving liquid medicine to A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. from an oral syringe with a small measured amount; a simple wall clock in soft focus suggests timed intervals; warm calm nursery lighting; no readable text
+Script line: 해열제는 아세트아미노펜을 4시간 간격으로 줄 수 있고, 3ml 용량은 적절합니다.
+MOOD: Warm
+CAMERA: Gentle handheld or static
+LIGHTING: Soft natural daylight
+STYLE: Cinematic realistic. 4K. No text on screen.
+
+**Veo prompt:**
+
+Cinematic 4K realistic footage. Warm calm instructional parenting health scene. NO text, NO words, NO letters, NO captions anywhere on screen. a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression carefully giving liquid medicine to A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. from an oral syringe with a small measured amount; a simple wall clock in soft focus suggests timed intervals; warm calm nursery lighting; no readable text. Cast consistency — child: A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. Parent: a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression. Natural colors, gentle handheld or static shot, soft daylight. 4 seconds.
+
+## EXPLAIN CLIP 2 (explain_2)
+
+SUBJECT: A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms.; a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression.
+SETTING: Modern Korean apartment or home — clean neutral interior, soft daylight, minimal clutter, no readable text on walls For this infant: nursery with crib, changing table, soft blankets, or parent holding baby — never a school classroom or playground for older kids.
+ACTION: a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression looking concerned while checking A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. who appears fussy and warm; parent reaches for a second fever medicine bottle on a shelf — calm instructional moment, not emergency panic; no readable text on bottles
+Script line: 만약 열이 계속 38.5도 이상이고 아기가 보챈다면, 이부프로펜으로 교차 복용을 고려할 수 있어요.
+MOOD: Warm
+CAMERA: Gentle handheld or static
+LIGHTING: Soft natural daylight
+STYLE: Cinematic realistic. 4K. No text on screen.
+
+**Veo prompt:**
+
+Cinematic 4K realistic footage. Warm calm instructional parenting health scene. NO text, NO words, NO letters, NO captions anywhere on screen. a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression looking concerned while checking A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. who appears fussy and warm; parent reaches for a second fever medicine bottle on a shelf — calm instructional moment, not emergency panic; no readable text on bottles. Cast consistency — child: A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. Parent: a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top — calm, attentive expression. Natural colors, gentle handheld or static shot, soft daylight. 4 seconds.
+
+## SIGNS CLIP 1 (signs_1)
+
+SUBJECT: One wordless presentation card (no text).
+SETTING: Minimal slide, soft warm off-white background.
+ACTION: Single card showing: a simple health-warning visual for 7-month-old infant baby suggesting: 열이 3일 이상 지속되거나, 숨쉬기가 거칠고 빨라질 때..
+Script line: 열이 3일 이상 지속되거나, 숨쉬기가 거칠고 빨라질 때.
+MOOD: Tense
+CAMERA: Static shot
+LIGHTING: Bright, even
+STYLE: Cinematic realistic. 4K. No text on screen.
+
+**Veo prompt:**
+
+Cinematic 4K. Single wordless presentation visual for a parent health video. NO text, NO words, NO letters, NO captions anywhere. Soft warm off-white background, one centered rounded card filling most of the frame, static camera, even bright lighting, tense-but-clear mood. The card shows only this one realistic image: a simple health-warning visual for 7-month-old infant baby suggesting: 열이 3일 이상 지속되거나, 숨쉬기가 거칠고 빨라질 때.. Cast consistency: A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. Clean minimalist slide look, not graphic, not a medical diagram. 4 seconds.
+
+## SIGNS CLIP 2 (signs_2)
+
+SUBJECT: One wordless presentation card (no text).
+SETTING: Minimal slide, soft warm off-white background.
+ACTION: Single card showing: a simple health-warning visual for 7-month-old infant baby suggesting: 수유량이 절반 이하로 줄거나, 8시간 넘게 소변을 보지 못할 때입니다..
+Script line: 수유량이 절반 이하로 줄거나, 8시간 넘게 소변을 보지 못할 때입니다.
+MOOD: Tense
+CAMERA: Static shot
+LIGHTING: Bright, even
+STYLE: Cinematic realistic. 4K. No text on screen.
+
+**Veo prompt:**
+
+Cinematic 4K. Single wordless presentation visual for a parent health video. NO text, NO words, NO letters, NO captions anywhere. Soft warm off-white background, one centered rounded card filling most of the frame, static camera, even bright lighting, tense-but-clear mood. The card shows only this one realistic image: a simple health-warning visual for 7-month-old infant baby suggesting: 수유량이 절반 이하로 줄거나, 8시간 넘게 소변을 보지 못할 때입니다.. Cast consistency: A 7-month-old infant baby. CRITICAL: this is an INFANT BABY (not a toddler or school-age child). Infant proportions — large head, chubby cheeks, sparse fine hair, cannot walk or stand. East Asian Korean features, dark brown eyes, warm light skin tone. Wearing a soft white and mint-green footed baby onesie. Often shown in crib, on changing table, or held in parent's arms. Clean minimalist slide look, not graphic, not a medical diagram. 4 seconds.
+
+## RELIEF CLIP (relief)
+
+SUBJECT: A 7-month-old infant baby, East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top. A pediatrician.
+SETTING: Clean, modern clinic examination room, soft daylight, minimal clutter.
+ACTION: The woman holds the baby while speaking with a pediatrician.
+MOOD: Relieved
+CAMERA: Static shot
+LIGHTING: Bright and warm
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an infant with East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie, is held by a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top. The woman speaks with a pediatrician in a clean, modern clinic examination room with soft daylight and minimal clutter. Static shot, bright and warm lighting. Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+## CTA CLIP (cta)
+
+SUBJECT: A 7-month-old infant baby, East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie. A Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top.
+SETTING: Bright, modern Korean apartment living room, clean neutral interior, soft daylight, minimal clutter.
+ACTION: The woman smiles warmly while holding her happy and healthy baby.
+MOOD: Warm
+CAMERA: Slow zoom in
+LIGHTING: Bright and warm
+STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+
+**Veo prompt:**
+
+A 7-month-old infant baby, an infant with East Asian Korean features, dark brown eyes, warm light skin tone, sparse fine hair, large head, chubby cheeks, short limbs, cannot walk or stand unsupported, wearing a soft white and mint-green footed baby onesie, is held by a Korean woman in her early 30s with straight black shoulder-length hair, warm light skin, dark brown eyes, wearing a cream-colored loungewear top. The woman smiles warmly while holding her happy and healthy baby in a bright, modern Korean apartment living room with clean neutral interior, soft daylight, and minimal clutter. Slow zoom in shot, bright and warm lighting. Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.
+

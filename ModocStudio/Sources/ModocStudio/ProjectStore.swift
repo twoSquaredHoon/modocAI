@@ -243,6 +243,11 @@ final class ProjectStore: ObservableObject {
         case .regenerateClip(let clipId):
             manifest.phase = .generatingVideos
             try? FileManager.default.removeItem(at: project.videoURL(for: clipId))
+        case .regenerateAllClips:
+            manifest.phase = .generatingVideos
+            for clip in project.loadClips() {
+                try? FileManager.default.removeItem(at: project.videoURL(for: clip.id))
+            }
         }
 
         try saveManifest(manifest, folder: project.folderURL)
@@ -271,7 +276,7 @@ final class ProjectStore: ObservableObject {
                 manifest.phase = .promptsReview
             case .generateVoiceover:
                 manifest.phase = .voiceoverReview
-            case .generateVideos, .regenerateClip:
+            case .generateVideos, .regenerateClip, .regenerateAllClips:
                 let clips = updated.loadClips()
                 let status = updated.videoStatus(for: clips)
                 manifest.phase = (status.total > 0 && status.done >= status.total) ? .ready : .voiceoverReview
@@ -339,6 +344,8 @@ final class ProjectStore: ObservableObject {
             return (.voiceover, "Voiceover", nil)
         case .generateVideos:
             return (.videos, "All video clips", nil)
+        case .regenerateAllClips:
+            return (.videos, "Regenerate all clips", nil)
         case .regenerateClip(let id):
             return (.clip, "Clip: \(id)", id)
         }

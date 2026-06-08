@@ -9,9 +9,14 @@ struct ClipsGalleryView: View {
     @State private var regenError: String?
     @State private var isRegenerating = false
     @State private var playerKey = UUID()
+    @State private var confirmRegenerateAll = false
 
     private var current: VideoProject {
         store.selectedProject ?? project
+    }
+
+    private var videoStatus: (done: Int, total: Int) {
+        current.videoStatus(for: clips)
     }
 
     var body: some View {
@@ -22,13 +27,56 @@ struct ClipsGalleryView: View {
                 description: Text("Generate clip prompts and videos from the Workflow tab.")
             )
         } else {
-            HSplitView {
-                clipList
-                    .frame(minWidth: 200, idealWidth: 220, maxWidth: 280)
-                clipPreview
-                    .frame(minWidth: 320, minHeight: 280)
+            VStack(spacing: 0) {
+                clipsToolbar
+                Divider()
+                HSplitView {
+                    clipList
+                        .frame(minWidth: 200, idealWidth: 220, maxWidth: 280)
+                    clipPreview
+                        .frame(minWidth: 320, minHeight: 280)
+                }
             }
         }
+    }
+
+    private var clipsToolbar: some View {
+        HStack(spacing: 12) {
+            Text("\(videoStatus.done)/\(videoStatus.total) clips generated")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            if isRegeneratingAllClips {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Regenerating all clips…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                confirmRegenerateAll = true
+            } label: {
+                Label("Regenerate all clips", systemImage: "arrow.clockwise.circle")
+            }
+            .disabled(!current.hasClipsJSON || store.pipeline.isRunning || isRegenerating)
+            .confirmationDialog(
+                "Regenerate all \(clips.count) clips?",
+                isPresented: $confirmRegenerateAll,
+                titleVisibility: .visible
+            ) {
+                Button("Regenerate all (\(clips.count) clips, Veo paid)", role: .destructive) {
+                    Task { await regenerateAll() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Deletes every existing clip video and generates them again from the current prompts.")
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
     }
 
     private var clipList: some View {
@@ -42,7 +90,10 @@ struct ClipsGalleryView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if hasVideo(clip.id) {
+                if isRegeneratingAllClips {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else if hasVideo(clip.id) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.caption)
@@ -79,7 +130,7 @@ struct ClipsGalleryView: View {
                 if isRegeneratingClip(id) {
                     HStack {
                         ProgressView()
-                        Text("Regenerating \(id)… (Veo, paid)")
+                        Text(regeneratingMessage(for: id))
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -122,7 +173,19 @@ struct ClipsGalleryView: View {
         .disabled(!current.hasClipsJSON || store.pipeline.isRunning || isRegenerating)
     }
 
+    private func regeneratingMessage(for clipId: String) -> String {
+        if isRegeneratingAllClips {
+            return "Regenerating all clips… (\(clipId) may be in queue)"
+        }
+        return "Regenerating \(clipId)… (Veo, paid)"
+    }
+
+    private var isRegeneratingAllClips: Bool {
+        store.pipeline.runningStep == .regenerateAllClips
+    }
+
     private func isRegeneratingClip(_ clipId: String) -> Bool {
+        if isRegeneratingAllClips { return true }
         if case .regenerateClip(let id) = store.pipeline.runningStep {
             return id == clipId
         }
@@ -135,6 +198,19 @@ struct ClipsGalleryView: View {
         defer { isRegenerating = false }
         do {
             try await store.runWorkflowStep(current, step: .regenerateClip(clipId))
+            playerKey = UUID()
+            store.refreshProjects()
+        } catch {
+            regenError = error.localizedDescription
+        }
+    }
+
+    private func regenerateAll() async {
+        regenError = nil
+        isRegenerating = true
+        defer { isRegenerating = false }
+        do {
+            try await store.runWorkflowStep(current, step: .regenerateAllClips)
             playerKey = UUID()
             store.refreshProjects()
         } catch {

@@ -32,7 +32,7 @@ struct NewProjectSheet: View {
                 .pickerStyle(.segmented)
                 .disabled(isCreating)
 
-                Text("Script and voiceover are generated in this language. Clip videos stay English prompts for Veo.")
+                Text("Script and voiceover use this language. Clip prompts use matching family appearance (see visual_cast.txt).")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }

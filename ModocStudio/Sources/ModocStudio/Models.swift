@@ -155,9 +155,10 @@ struct VideoProject: Identifiable, Hashable {
     static func sortKey(for id: String) -> (Int, Int) {
         if id == "hook" { return (0, 0) }
         if id.hasPrefix("body_"), let n = Int(id.dropFirst(5)) { return (1, n) }
-        if id.hasPrefix("signs_"), let n = Int(id.dropFirst(6)) { return (2, n) }
-        if id == "relief" { return (3, 0) }
-        if id == "cta" { return (4, 0) }
+        if id.hasPrefix("explain_"), let n = Int(id.dropFirst(8)) { return (2, n) }
+        if id.hasPrefix("signs_"), let n = Int(id.dropFirst(6)) { return (3, n) }
+        if id == "relief" { return (4, 0) }
+        if id == "cta" { return (5, 0) }
         return (99, 0)
     }
 
