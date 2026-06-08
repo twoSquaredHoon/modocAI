@@ -10,19 +10,32 @@ struct MacAVPlayerView: NSViewRepresentable {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> AVPlayerView {
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
         let view = AVPlayerView()
         view.controlsStyle = .inline
         view.showsFullScreenToggleButton = false
         view.showsSharingServiceButton = false
+        view.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(view)
+
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            view.topAnchor.constraint(equalTo: container.topAnchor),
+            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
         let player = AVPlayer(url: url)
         view.player = player
         context.coordinator.player = player
+        context.coordinator.playerView = view
         context.coordinator.currentURL = url
-        return view
+        return container
     }
 
-    func updateNSView(_ view: AVPlayerView, context: Context) {
+    func updateNSView(_ container: NSView, context: Context) {
+        guard let view = context.coordinator.playerView else { return }
         guard context.coordinator.currentURL != url else { return }
         context.coordinator.currentURL = url
         view.player?.pause()
@@ -31,14 +44,15 @@ struct MacAVPlayerView: NSViewRepresentable {
         context.coordinator.player = player
     }
 
-    static func dismantleNSView(_ view: AVPlayerView, coordinator: Coordinator) {
-        view.player?.pause()
-        view.player = nil
+    static func dismantleNSView(_ container: NSView, coordinator: Coordinator) {
+        coordinator.playerView?.player?.pause()
+        coordinator.playerView?.player = nil
         coordinator.player = nil
     }
 
     final class Coordinator {
         var player: AVPlayer?
+        var playerView: AVPlayerView?
         var currentURL: URL?
     }
 }

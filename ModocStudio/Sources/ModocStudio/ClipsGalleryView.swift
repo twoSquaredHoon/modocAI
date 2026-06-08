@@ -20,24 +20,28 @@ struct ClipsGalleryView: View {
     }
 
     var body: some View {
-        if clips.isEmpty {
-            ContentUnavailableView(
-                "No clips yet",
-                systemImage: "film",
-                description: Text("Generate clip prompts and videos from the Workflow tab.")
-            )
-        } else {
-            VStack(spacing: 0) {
-                clipsToolbar
-                Divider()
-                HSplitView {
-                    clipList
-                        .frame(minWidth: 200, idealWidth: 220, maxWidth: 280)
-                    clipPreview
-                        .frame(minWidth: 320, minHeight: 280)
+        Group {
+            if clips.isEmpty {
+                ContentUnavailableView(
+                    "No clips yet",
+                    systemImage: "film",
+                    description: Text("Generate clip prompts and videos from the Workflow tab.")
+                )
+            } else {
+                VStack(spacing: 0) {
+                    clipsToolbar
+                    Divider()
+                    HSplitView {
+                        clipList
+                            .frame(minWidth: 200, idealWidth: 220, maxWidth: 280)
+                        clipPreview
+                            .frame(minWidth: 320)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var clipsToolbar: some View {
@@ -106,12 +110,13 @@ struct ClipsGalleryView: View {
             .tag(clip.id)
         }
         .listStyle(.sidebar)
+        .frame(maxHeight: .infinity)
     }
 
     @ViewBuilder
     private var clipPreview: some View {
         if let id = selectedClipID, let clip = clips.first(where: { $0.id == id }) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text(clip.label)
                         .font(.title3.bold())
@@ -119,47 +124,64 @@ struct ClipsGalleryView: View {
                     regenerateButton(for: id)
                 }
                 .padding(.horizontal)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
                 if let regenError {
                     Text(regenError)
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.horizontal)
+                        .padding(.bottom, 8)
                 }
 
-                if isRegeneratingClip(id) {
-                    HStack {
-                        ProgressView()
-                        Text(regeneratingMessage(for: id))
-                            .foregroundStyle(.secondary)
-                    }
+                previewContent(for: clip, id: id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if hasVideo(id) {
-                    MacAVPlayerView(url: current.videoURL(for: id))
-                        .frame(minHeight: 240, maxHeight: .infinity)
-                        .padding(.horizontal)
-                        .id(playerKey)
-                } else {
-                    ContentUnavailableView(
-                        "Not generated",
-                        systemImage: "video.slash",
-                        description: Text("Tap Regenerate clip to create this video.")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                    .layoutPriority(1)
 
                 if let prompt = clip.veoPrompt ?? clip.detailedPrompt {
-                    Text(prompt)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(6)
-                        .textSelection(.enabled)
-                        .padding(.horizontal)
+                    Divider()
+                    ScrollView {
+                        Text(prompt)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 120)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color(nsColor: .windowBackgroundColor))
                 }
             }
-            .padding(.vertical)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
             ContentUnavailableView("Select a clip", systemImage: "play.rectangle")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func previewContent(for clip: ClipRecord, id: String) -> some View {
+        if isRegeneratingClip(id) {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text(regeneratingMessage(for: id))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if hasVideo(id) {
+            MacAVPlayerView(url: current.videoURL(for: id))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .id(playerKey)
+        } else {
+            ContentUnavailableView(
+                "Not generated",
+                systemImage: "video.slash",
+                description: Text("Tap Regenerate clip to create this video.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

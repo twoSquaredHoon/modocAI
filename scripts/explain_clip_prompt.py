@@ -15,22 +15,24 @@ SIGNS_INTRO_RE = re.compile(
     r"(?:watch for|warning signs?|serious signs?|danger signs?|"
     r"위험\s*신호|위험신호|이런\s*위험|"
     r"señales?\s+de\s+alarma|signos?\s+de\s+alarma|"
+    r"estate\s+atento|presta\s+atención|presta\s+atencion|atento\s+a\s+(?:estas|estos)|"
     r"다만.*(?:신호|병원|위험))",
     re.I,
 )
 
 EXPLAIN_LINE_RE = re.compile(
     r"(?:"
-    r"\b\d+\s*(?:ml|mg|mL)\b|"
-    r"(?:every|each|every)\s+\d+\s*(?:hour|hr|h)\b|"
-    r"\d+\s*(?:hour|hr|h|시간)\s*(?:interval|간격|every)?|"
-    r"(?:acetaminophen|ibuprofen|tylenol|motrin|advil|"
+    r"\b\d+\s*(?:ml|mg|mL|cc)\b|"
+    r"(?:every|each)\s+\d+\s*(?:hour|hr|h)\b|"
+    r"\d+\s*(?:hour|hr|h|시간|horas?)\s*(?:interval|간격|every|cada)?|"
+    r"(?:acetaminophen|ibuprofen|tylenol|motrin|advil|paracetamol|acetaminof[eé]n|"
     r"아세트|이부프로|해열|교차\s*복용|복용|용량)|"
-    r"(?:alternate|alternating|rotate|switch\s+to|교차)|"
-    r"(?:dose|dosing|dosage|administer|give\s+(?:the|a)?)|"
-    r"(?:fever\s+reducer|antipyretic)|"
+    r"(?:alternate|alternating|rotate|switch\s+to|교차|alternar)|"
+    r"(?:dose|dosing|dosage|administer|give\s+(?:the|a)?|administra|administrar|dar\s+(?:le|la|el)?)|"
+    r"(?:fever\s+reducer|antipyretic|antipir[eé]tico|reductor\s+de\s+fiebre)|"
     r"(?:ml\s*용량|간격으로)|"
-    r"(?:cada\s+\d+\s*horas|acetaminof|ibuprofeno|dosis|administrar)"
+    r"(?:cada\s+\d+\s*horas?|dosis|l[ií]quidos?|hidrat|hidrataci[oó]n|"
+    r"ropa\s+ligera|temperatura\s+ambiente|s[eé]cale|baño\s+de\s+esponja)"
     r")",
     re.I,
 )

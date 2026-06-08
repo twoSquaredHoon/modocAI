@@ -94,6 +94,9 @@ final class ProjectStore: ObservableObject {
         ModocConfig.registerOpenedProject(folder)
         refreshProjects()
         selectedProjectID = folder.path
+        if let proj = loadProject(from: folder) {
+            PipelineTimeTracker.recordProjectOpened(proj)
+        }
     }
 
     private func createManifestForLegacyFolder(_ folder: URL) throws {
@@ -121,7 +124,9 @@ final class ProjectStore: ObservableObject {
             return nil
         }
         syncPhase(projectFolder: folder, manifest: &manifest)
-        return VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
+        let project = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
+        try? LanguageWorkspace.migrateLegacyIfNeeded(project)
+        return project
     }
 
     private func syncPhase(projectFolder: URL, manifest: inout ProjectManifest) {
@@ -185,14 +190,19 @@ final class ProjectStore: ObservableObject {
         )
         try saveManifest(manifest, folder: folder)
 
+        PipelineTimeTracker.recordProjectOpened(
+            VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
+        )
+
         refreshProjects()
         selectedProjectID = folder.path
 
+        let proj0 = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
+        var runId = ""
         do {
-            try await pipeline.runProjectStep(
-                VideoProject(id: folder.path, folderURL: folder, manifest: manifest),
-                step: .generateScript
-            )
+            runId = PipelineTimeTracker.beginAutomatedStep(project: proj0, step: .generateScript)
+            try await pipeline.runProjectStep(proj0, step: .generateScript)
+            PipelineTimeTracker.endAutomatedStep(project: proj0, runId: runId, success: true)
             let script = (try? String(contentsOf: folder.appendingPathComponent("script.txt"), encoding: .utf8)) ?? ""
             manifest.title = VideoProject.title(from: script)
             manifest.phase = .scriptReview
@@ -201,7 +211,11 @@ final class ProjectStore: ObservableObject {
 
             let proj = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
             try recordGraphRun(project: proj, step: .generateScript, nodeLabel: "Script", success: true)
+            try? LanguageWorkspace.persistActive(proj, language: manifest.language)
         } catch {
+            if !runId.isEmpty {
+                PipelineTimeTracker.endAutomatedStep(project: proj0, runId: runId, success: false)
+            }
             manifest.phase = .failed
             manifest.lastError = error.localizedDescription
             try? saveManifest(manifest, folder: folder)
@@ -215,14 +229,21 @@ final class ProjectStore: ObservableObject {
         var manifest = project.manifest
         manifest.lastError = nil
 
-        let graphManager = WorkflowGraphManager(projectFolder: project.folderURL)
+        let graphManager = WorkflowGraphManager(
+            projectFolder: project.folderURL,
+            language: project.manifest.language
+        )
         try? graphManager.ensureGraphFromLegacy(project: project)
         var graph = graphManager.load()
 
         let meta = graphMeta(for: step)
+        let revisionMode = graph.lastCompleteVersionId != nil
+        let nodeKind = revisionMode ? WorkflowStepKind.revision : meta.kind
+        let nodeLabel = revisionMode ? "Change: \(meta.label)" : meta.label
+
         let node = graphManager.beginRun(
-            step: meta.kind,
-            label: meta.label,
+            step: nodeKind,
+            label: nodeLabel,
             parentId: graph.activeNodeId,
             clipId: meta.clipId
         )
@@ -255,15 +276,19 @@ final class ProjectStore: ObservableObject {
 
         let latest = projects.first { $0.id == project.id } ?? project
 
+        let runId = PipelineTimeTracker.beginAutomatedStep(project: latest, step: step)
+
         do {
             try await pipeline.runProjectStep(latest, step: step)
             let updated = loadProject(from: project.folderURL) ?? latest
+            PipelineTimeTracker.endAutomatedStep(project: updated, runId: runId, success: true)
             try graphManager.snapshotProjectState(project: updated, intoRelativeDir: node.snapshotDir)
 
             if let idx = graph.nodes.firstIndex(where: { $0.id == node.id }) {
                 graph.nodes[idx].status = "completed"
             }
             graph.activeNodeId = node.id
+            try graphManager.maybeRecordCompleteVersion(project: updated, graph: &graph)
             try graphManager.save(graph)
 
             manifest = updated.manifest
@@ -283,7 +308,13 @@ final class ProjectStore: ObservableObject {
             }
 
             try saveManifest(manifest, folder: project.folderURL)
+            try? LanguageWorkspace.persistActive(updated, language: updated.manifest.language)
         } catch {
+            PipelineTimeTracker.endAutomatedStep(
+                project: loadProject(from: project.folderURL) ?? latest,
+                runId: runId,
+                success: false
+            )
             if let idx = graph.nodes.firstIndex(where: { $0.id == node.id }) {
                 graph.nodes[idx].status = "failed"
             }
@@ -297,15 +328,28 @@ final class ProjectStore: ObservableObject {
         refreshProjects()
     }
 
-    func restoreWorkflowNode(project: VideoProject, nodeId: String) throws {
-        let graphManager = WorkflowGraphManager(projectFolder: project.folderURL)
+    func restoreWorkflowNode(
+        project: VideoProject,
+        nodeId: String,
+        language: ProjectLanguage
+    ) throws {
+        let graphManager = WorkflowGraphManager(
+            projectFolder: project.folderURL,
+            language: language
+        )
         var graph = graphManager.load()
         guard let node = graph.nodes.first(where: { $0.id == nodeId }) else { return }
 
         try graphManager.restoreSnapshot(relativeDir: node.snapshotDir, project: project)
         graph.activeNodeId = nodeId
+        if node.step == .complete {
+            graph.lastCompleteVersionId = nodeId
+        }
         try graphManager.save(graph)
-        refreshProjects()
+
+        if language == project.manifest.language {
+            refreshProjects()
+        }
     }
 
     private func recordGraphRun(
@@ -314,7 +358,10 @@ final class ProjectStore: ObservableObject {
         nodeLabel: String,
         success: Bool
     ) throws {
-        let graphManager = WorkflowGraphManager(projectFolder: project.folderURL)
+        let graphManager = WorkflowGraphManager(
+            projectFolder: project.folderURL,
+            language: project.manifest.language
+        )
         var graph = graphManager.load()
         let meta = graphMeta(for: step)
         var node = graphManager.beginRun(
@@ -365,10 +412,35 @@ final class ProjectStore: ObservableObject {
 
     func setProjectLanguage(_ project: VideoProject, language: ProjectLanguage) {
         guard project.manifest.language != language else { return }
+        let previous = project.manifest.language
+        PipelineTimeTracker.recordLanguageSwitch(project: project, from: previous, to: language)
+        do {
+            try LanguageWorkspace.persistActive(project, language: previous)
+            try LanguageWorkspace.activate(project, language: language)
+        } catch {
+            // Best-effort file swap when switching languages.
+        }
         var manifest = project.manifest
         manifest.language = language
+        manifest.lastError = nil
+        manifest.phase = ProjectManifest.inferPhase(in: project.folderURL)
         try? saveManifest(manifest, folder: project.folderURL)
         refreshProjects()
+    }
+
+    func finalizePipelineLanguage(_ project: VideoProject, language: ProjectLanguage? = nil) {
+        let lang = language ?? project.manifest.language
+        PipelineTimeTracker.finalizeLanguage(project: project, language: lang)
+        let graphManager = WorkflowGraphManager(projectFolder: project.folderURL, language: lang)
+        var graph = graphManager.load()
+        if WorkflowCompletion.isComplete(project, language: lang) {
+            try? graphManager.maybeRecordCompleteVersion(project: project, graph: &graph)
+        }
+        refreshProjects()
+    }
+
+    func isLanguageFinalized(_ project: VideoProject, language: ProjectLanguage) -> Bool {
+        PipelineTimeTracker.load(for: project).languages[language.rawValue]?.finalizedAt != nil
     }
 
     func saveManifest(_ manifest: ProjectManifest, folder: URL) throws {

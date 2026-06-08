@@ -1,0 +1,27 @@
+VISUAL CAST BIBLE (use in EVERY clip that shows people — copy verbatim; do not invent new faces):
+
+Target market: United States — Spanish-speaking Hispanic/Latino audience
+
+MANDATORY CHILD AGE (from blog/script — overrides any model default):
+- Exact age for every clip: 7-year-old child
+- Developmental category: school age
+- MUST depict a school-age child (typically 5–12 years), NOT an infant or toddler.
+- Every veo_prompt and SUBJECT line must state this exact age in the first sentence.
+
+CHILD (same individual in all clips — age and developmental stage are NON-NEGOTIABLE):
+A 7-year-old child. School-age child. warm medium-brown skin, dark brown eyes, dark brown hair. Wearing a soft red cotton t-shirt and denim blue jeans.
+
+PRIMARY PARENT (same individual in all clips):
+a Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee — caring, alert expression
+
+SECOND PARENT (only if a second adult is needed — same individuals every time):
+a Latino man in his mid-30s with warm medium-brown skin, short dark hair, neatly trimmed beard, wearing a navy blue casual button-down shirt
+
+DEFAULT SETTINGS:
+Warm lived-in US Hispanic/Latino household — natural window light; no brand logos or readable text
+
+CAST CONSISTENCY RULES:
+- AGE IS MANDATORY: every clip must show 7-year-old child — same developmental stage (school age) in every shot. Never age-up or age-down.
+- The child and parent must be the SAME Hispanic/Latino family in every clip.
+- Match skin tone, hair, facial features, and age exactly across clips.
+- SIGNS clips: any child shown must match this exact child at this exact age.

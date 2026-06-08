@@ -6,11 +6,15 @@ struct WorkflowGraphView: View {
     @EnvironmentObject private var store: ProjectStore
     let project: VideoProject
 
-    @State private var graph: WorkflowGraphFile = WorkflowGraphFile(nodes: [], activeNodeId: nil)
+    @State private var graphsByLanguage: [ProjectLanguage: WorkflowGraphFile] = [:]
     @State private var restoreError: String?
     @State private var selectedNodeId: String?
 
     private let layoutEngine = WorkflowTimelineLayout()
+
+    private var current: VideoProject {
+        store.selectedProject ?? project
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,6 +24,7 @@ struct WorkflowGraphView: View {
         }
         .onAppear { reloadGraph() }
         .onChange(of: project.id) { _, _ in reloadGraph() }
+        .onChange(of: current.manifest.language) { _, _ in reloadGraph() }
         .onChange(of: store.pipeline.isRunning) { _, _ in
             if !store.pipeline.isRunning { reloadGraph() }
         }
@@ -29,13 +34,20 @@ struct WorkflowGraphView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Version timeline")
                 .font(.headline)
-            Text("Runs flow left → right. Regenerating a step forks a new branch downward. The highlighted path is your current project state.")
+            Text("Three lanes — EN, KO, ES. A **Complete workflow** node (full snapshot) is created when all four steps finish. After that, every change is saved as a **Change** revision with all artifacts.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 16) {
                 legendDot(color: .accentColor, label: "Active path")
-                legendDot(color: .secondary.opacity(0.5), dashed: true, label: "Alternate version")
+                legendDot(color: .secondary.opacity(0.5), dashed: true, label: "Alternate branch")
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                    Text("Complete version")
+                        .font(.caption)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -50,24 +62,17 @@ struct WorkflowGraphView: View {
     }
 
     private var timelineBody: some View {
-        Group {
-            if graph.nodes.isEmpty {
-                ContentUnavailableView(
-                    "No runs yet",
-                    systemImage: "timeline.selection",
-                    description: Text("Run workflow steps or regenerate a clip to build the timeline.")
-                )
-            } else {
-                ScrollView([.horizontal, .vertical]) {
-                    WorkflowTimelineCanvas(
-                        layout: layoutEngine.layout(graph: graph),
-                        selectedNodeId: selectedNodeId,
-                        onSelect: { selectedNodeId = $0.id },
-                        onRestore: restore
-                    )
-                    .padding(32)
-                }
-            }
+        ScrollView([.horizontal, .vertical]) {
+            MultiLanguageWorkflowCanvas(
+                layout: layoutEngine.layoutMulti(
+                    graphs: graphsByLanguage,
+                    activeLanguage: current.manifest.language
+                ),
+                selectedNodeId: selectedNodeId,
+                onSelect: { selectedNodeId = $0.id },
+                onRestore: restore
+            )
+            .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -88,181 +93,42 @@ struct WorkflowGraphView: View {
     }
 
     private func reloadGraph() {
-        let manager = WorkflowGraphManager(projectFolder: project.folderURL)
-        try? manager.ensureGraphFromLegacy(project: project)
-        graph = project.loadWorkflowGraph()
+        let p = current
+        var loaded: [ProjectLanguage: WorkflowGraphFile] = [:]
+        for lang in ProjectLanguage.allCases {
+            let manager = WorkflowGraphManager(projectFolder: p.folderURL, language: lang)
+            try? manager.ensureGraphFromLegacy(project: p)
+            loaded[lang] = p.loadWorkflowGraph(for: lang)
+        }
+        graphsByLanguage = loaded
         if selectedNodeId == nil {
-            selectedNodeId = graph.activeNodeId
+            selectedNodeId = loaded[p.manifest.language]?.activeNodeId
         }
     }
 
-    private func restore(_ node: WorkflowNode) {
+    private func restore(_ placement: WorkflowTimelineLayout.NodePlacement) {
         restoreError = nil
         do {
-            try store.restoreWorkflowNode(project: project, nodeId: node.id)
+            try store.restoreWorkflowNode(
+                project: current,
+                nodeId: placement.node.id,
+                language: placement.language
+            )
             reloadGraph()
-            selectedNodeId = node.id
+            selectedNodeId = placement.node.id
         } catch {
             restoreError = error.localizedDescription
         }
     }
 }
 
-// MARK: - Layout
+// MARK: - Multi-language canvas
 
-struct WorkflowTimelineLayout {
-    struct NodePlacement: Identifiable {
-        let node: WorkflowNode
-        let rect: CGRect
-        let isOnActivePath: Bool
-        let isActiveTip: Bool
-
-        var id: String { node.id }
-    }
-
-    struct Edge {
-        let from: CGPoint
-        let to: CGPoint
-        let isOnActivePath: Bool
-    }
-
-    struct Result {
-        let nodes: [NodePlacement]
-        let edges: [Edge]
-        let size: CGSize
-    }
-
-    private let nodeSize = CGSize(width: 148, height: 76)
-    private let hGap: CGFloat = 44
-    private let vGap: CGFloat = 28
-
-    func layout(graph: WorkflowGraphFile) -> Result {
-        let activePathIds = Set(activePath(in: graph).map(\.id))
-        let activeTipId = graph.activeNodeId
-        let roots = graph.nodes.filter { $0.parentId == nil }.sorted { $0.createdAt < $1.createdAt }
-
-        var placements: [NodePlacement] = []
-        var edges: [Edge] = []
-        var maxX: CGFloat = 0
-        var maxY: CGFloat = 0
-
-        for (rootIndex, root) in roots.enumerated() {
-            let startY = CGFloat(rootIndex) * (nodeSize.height + vGap * 2)
-            layoutSubtree(
-                node: root,
-                graph: graph,
-                x: 0,
-                y: startY,
-                activePathIds: activePathIds,
-                activeTipId: activeTipId,
-                placements: &placements,
-                edges: &edges,
-                maxX: &maxX,
-                maxY: &maxY
-            )
-        }
-
-        let size = CGSize(
-            width: max(maxX + 48, 400),
-            height: max(maxY + 48, 240)
-        )
-        return Result(nodes: placements, edges: edges, size: size)
-    }
-
-    private func layoutSubtree(
-        node: WorkflowNode,
-        graph: WorkflowGraphFile,
-        x: CGFloat,
-        y: CGFloat,
-        activePathIds: Set<String>,
-        activeTipId: String?,
-        placements: inout [NodePlacement],
-        edges: inout [Edge],
-        maxX: inout CGFloat,
-        maxY: inout CGFloat
-    ) {
-        let rect = CGRect(origin: CGPoint(x: x, y: y), size: nodeSize)
-        placements.append(NodePlacement(
-            node: node,
-            rect: rect,
-            isOnActivePath: activePathIds.contains(node.id),
-            isActiveTip: node.id == activeTipId
-        ))
-        maxX = max(maxX, rect.maxX)
-        maxY = max(maxY, rect.maxY)
-
-        let children = graph.nodes
-            .filter { $0.parentId == node.id }
-            .sorted { $0.createdAt < $1.createdAt }
-
-        guard !children.isEmpty else { return }
-
-        let activeChild = children.first { activePathIds.contains($0.id) }
-        let alternateChildren = children.filter { !activePathIds.contains($0.id) }
-
-        let nextX = x + nodeSize.width + hGap
-
-        if let activeChild {
-            let from = CGPoint(x: rect.maxX, y: rect.midY)
-            let to = CGPoint(x: nextX, y: y + nodeSize.height / 2)
-            edges.append(Edge(from: from, to: to, isOnActivePath: true))
-            layoutSubtree(
-                node: activeChild,
-                graph: graph,
-                x: nextX,
-                y: y,
-                activePathIds: activePathIds,
-                activeTipId: activeTipId,
-                placements: &placements,
-                edges: &edges,
-                maxX: &maxX,
-                maxY: &maxY
-            )
-        }
-
-        for (index, alt) in alternateChildren.enumerated() {
-            let branchY = y + nodeSize.height + vGap + CGFloat(index) * (nodeSize.height + vGap)
-            let from = CGPoint(x: rect.midX, y: rect.maxY)
-            let to = CGPoint(x: nextX, y: branchY + nodeSize.height / 2)
-            edges.append(Edge(from: from, to: to, isOnActivePath: false))
-            layoutSubtree(
-                node: alt,
-                graph: graph,
-                x: nextX,
-                y: branchY,
-                activePathIds: activePathIds,
-                activeTipId: activeTipId,
-                placements: &placements,
-                edges: &edges,
-                maxX: &maxX,
-                maxY: &maxY
-            )
-        }
-    }
-
-    private func activePath(in graph: WorkflowGraphFile) -> [WorkflowNode] {
-        guard let tipId = graph.activeNodeId,
-              let tip = graph.nodes.first(where: { $0.id == tipId }) else {
-            return graph.nodes.filter { $0.parentId == nil }
-        }
-        var path: [WorkflowNode] = [tip]
-        var current = tip
-        while let parentId = current.parentId,
-              let parent = graph.nodes.first(where: { $0.id == parentId }) {
-            path.insert(parent, at: 0)
-            current = parent
-        }
-        return path
-    }
-}
-
-// MARK: - Canvas
-
-struct WorkflowTimelineCanvas: View {
-    let layout: WorkflowTimelineLayout.Result
+struct MultiLanguageWorkflowCanvas: View {
+    let layout: WorkflowTimelineLayout.MultiResult
     let selectedNodeId: String?
-    let onSelect: (WorkflowNode) -> Void
-    let onRestore: (WorkflowNode) -> Void
+    let onSelect: (WorkflowTimelineLayout.NodePlacement) -> Void
+    let onRestore: (WorkflowTimelineLayout.NodePlacement) -> Void
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -293,12 +159,26 @@ struct WorkflowTimelineCanvas: View {
             }
             .frame(width: layout.size.width, height: layout.size.height)
 
+            ForEach(layout.lanes) { lane in
+                Text(lane.language.shortLabel)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(lane.isActiveLanguage ? Color.accentColor : Color.secondary)
+                    .position(x: 22, y: lane.midY)
+
+                if lane.isEmpty {
+                    Text("No runs yet")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .position(x: lane.emptyLabelX, y: lane.midY)
+                }
+            }
+
             ForEach(layout.nodes) { placement in
                 WorkflowTimelineNodeCard(
                     placement: placement,
                     isSelected: selectedNodeId == placement.node.id,
-                    onSelect: { onSelect(placement.node) },
-                    onRestore: { onRestore(placement.node) }
+                    onSelect: { onSelect(placement) },
+                    onRestore: { onRestore(placement) }
                 )
                 .position(x: placement.rect.midX, y: placement.rect.midY)
             }
@@ -306,6 +186,209 @@ struct WorkflowTimelineCanvas: View {
         .frame(width: layout.size.width, height: layout.size.height)
     }
 }
+
+// MARK: - Layout
+
+struct WorkflowTimelineLayout {
+    struct NodePlacement: Identifiable {
+        let node: WorkflowNode
+        let rect: CGRect
+        let language: ProjectLanguage
+        let isOnActivePath: Bool
+        let isActiveTip: Bool
+        let isActiveLanguageLane: Bool
+
+        var id: String { "\(language.rawValue)-\(node.id)" }
+    }
+
+    struct LaneLabel: Identifiable {
+        let language: ProjectLanguage
+        let midY: CGFloat
+        let isActiveLanguage: Bool
+        let isEmpty: Bool
+        let emptyLabelX: CGFloat
+
+        var id: String { language.rawValue }
+    }
+
+    struct Edge {
+        let from: CGPoint
+        let to: CGPoint
+        let isOnActivePath: Bool
+    }
+
+    struct Result {
+        let nodes: [NodePlacement]
+        let edges: [Edge]
+        let size: CGSize
+    }
+
+    struct MultiResult {
+        let nodes: [NodePlacement]
+        let edges: [Edge]
+        let lanes: [LaneLabel]
+        let size: CGSize
+    }
+
+    private let nodeSize = CGSize(width: 148, height: 76)
+    private let hGap: CGFloat = 44
+    private let vGap: CGFloat = 28
+    private let laneHeaderWidth: CGFloat = 48
+    private let laneHeight: CGFloat = 96
+    private let laneGap: CGFloat = 36
+
+    func layoutMulti(
+        graphs: [ProjectLanguage: WorkflowGraphFile],
+        activeLanguage: ProjectLanguage
+    ) -> MultiResult {
+        var allNodes: [NodePlacement] = []
+        var allEdges: [Edge] = []
+        var lanes: [LaneLabel] = []
+        var maxX: CGFloat = laneHeaderWidth + nodeSize.width
+        var totalHeight: CGFloat = 0
+
+        for (laneIndex, language) in ProjectLanguage.allCases.enumerated() {
+            let graph = graphs[language] ?? WorkflowGraphFile(nodes: [], activeNodeId: nil)
+            let baseY = CGFloat(laneIndex) * (laneHeight + laneGap)
+            let laneMidY = baseY + laneHeight / 2
+            let isActiveLane = language == activeLanguage
+            let activePathIds = Set(activePath(in: graph).map(\.id))
+            let activeTipId = graph.activeNodeId
+            let roots = graph.nodes.filter { $0.parentId == nil }.sorted { $0.createdAt < $1.createdAt }
+
+            lanes.append(LaneLabel(
+                language: language,
+                midY: laneMidY,
+                isActiveLanguage: isActiveLane,
+                isEmpty: graph.nodes.isEmpty,
+                emptyLabelX: laneHeaderWidth + 80
+            ))
+
+            var laneMaxX = laneHeaderWidth
+            for root in roots {
+                layoutSubtree(
+                    node: root,
+                    graph: graph,
+                    language: language,
+                    x: laneHeaderWidth,
+                    y: baseY,
+                    activePathIds: activePathIds,
+                    activeTipId: activeTipId,
+                    isActiveLanguageLane: isActiveLane,
+                    placements: &allNodes,
+                    edges: &allEdges,
+                    maxX: &laneMaxX,
+                    maxY: { _ in }
+                )
+            }
+
+            maxX = max(maxX, laneMaxX)
+            totalHeight = max(totalHeight, baseY + laneHeight)
+        }
+
+        let size = CGSize(
+            width: max(maxX + 48, 520),
+            height: max(totalHeight + 48, CGFloat(ProjectLanguage.allCases.count) * (laneHeight + laneGap))
+        )
+        return MultiResult(nodes: allNodes, edges: allEdges, lanes: lanes, size: size)
+    }
+
+    private func layoutSubtree(
+        node: WorkflowNode,
+        graph: WorkflowGraphFile,
+        language: ProjectLanguage,
+        x: CGFloat,
+        y: CGFloat,
+        activePathIds: Set<String>,
+        activeTipId: String?,
+        isActiveLanguageLane: Bool,
+        placements: inout [NodePlacement],
+        edges: inout [Edge],
+        maxX: inout CGFloat,
+        maxY: (CGFloat) -> Void
+    ) {
+        let rect = CGRect(origin: CGPoint(x: x, y: y), size: nodeSize)
+        let onPath = isActiveLanguageLane && activePathIds.contains(node.id)
+        placements.append(NodePlacement(
+            node: node,
+            rect: rect,
+            language: language,
+            isOnActivePath: onPath,
+            isActiveTip: isActiveLanguageLane && node.id == activeTipId,
+            isActiveLanguageLane: isActiveLanguageLane
+        ))
+        maxX = max(maxX, rect.maxX)
+        maxY(rect.maxY)
+
+        let children = graph.nodes
+            .filter { $0.parentId == node.id }
+            .sorted { $0.createdAt < $1.createdAt }
+
+        guard !children.isEmpty else { return }
+
+        let activeChild = children.first { activePathIds.contains($0.id) }
+        let alternateChildren = children.filter { !activePathIds.contains($0.id) }
+        let nextX = x + nodeSize.width + hGap
+
+        if let activeChild {
+            let from = CGPoint(x: rect.maxX, y: rect.midY)
+            let to = CGPoint(x: nextX, y: y + nodeSize.height / 2)
+            edges.append(Edge(from: from, to: to, isOnActivePath: onPath))
+            layoutSubtree(
+                node: activeChild,
+                graph: graph,
+                language: language,
+                x: nextX,
+                y: y,
+                activePathIds: activePathIds,
+                activeTipId: activeTipId,
+                isActiveLanguageLane: isActiveLanguageLane,
+                placements: &placements,
+                edges: &edges,
+                maxX: &maxX,
+                maxY: maxY
+            )
+        }
+
+        for (index, alt) in alternateChildren.enumerated() {
+            let branchY = y + nodeSize.height + vGap + CGFloat(index) * (nodeSize.height + vGap)
+            let from = CGPoint(x: rect.midX, y: rect.maxY)
+            let to = CGPoint(x: nextX, y: branchY + nodeSize.height / 2)
+            edges.append(Edge(from: from, to: to, isOnActivePath: false))
+            layoutSubtree(
+                node: alt,
+                graph: graph,
+                language: language,
+                x: nextX,
+                y: branchY,
+                activePathIds: activePathIds,
+                activeTipId: activeTipId,
+                isActiveLanguageLane: isActiveLanguageLane,
+                placements: &placements,
+                edges: &edges,
+                maxX: &maxX,
+                maxY: maxY
+            )
+        }
+    }
+
+    private func activePath(in graph: WorkflowGraphFile) -> [WorkflowNode] {
+        guard let tipId = graph.activeNodeId,
+              let tip = graph.nodes.first(where: { $0.id == tipId }) else {
+            return graph.nodes.filter { $0.parentId == nil }
+        }
+        var path: [WorkflowNode] = [tip]
+        var current = tip
+        while let parentId = current.parentId,
+              let parent = graph.nodes.first(where: { $0.id == parentId }) {
+            path.insert(parent, at: 0)
+            current = parent
+        }
+        return path
+    }
+}
+
+// MARK: - Node card
 
 struct WorkflowTimelineNodeCard: View {
     let placement: WorkflowTimelineLayout.NodePlacement
@@ -329,7 +412,14 @@ struct WorkflowTimelineNodeCard: View {
 
             HStack(spacing: 6) {
                 statusPill
-                if placement.isActiveTip {
+                if node.step == .complete {
+                    Text("milestone")
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.2), in: Capsule())
+                        .foregroundStyle(.green)
+                } else if placement.isActiveTip {
                     Text("current")
                         .font(.system(size: 9, weight: .bold))
                         .padding(.horizontal, 5)
@@ -360,10 +450,14 @@ struct WorkflowTimelineNodeCard: View {
                 .stroke(borderColor, lineWidth: placement.isActiveTip || isSelected ? 2 : 1)
         )
         .shadow(color: .black.opacity(placement.isOnActivePath ? 0.08 : 0.03), radius: 4, y: 2)
+        .opacity(placement.isActiveLanguageLane ? 1 : 0.82)
         .onTapGesture { onSelect() }
     }
 
     private var backgroundFill: Color {
+        if node.step == .complete {
+            return Color.green.opacity(0.1)
+        }
         if placement.isActiveTip {
             return Color.accentColor.opacity(0.12)
         }
@@ -374,6 +468,7 @@ struct WorkflowTimelineNodeCard: View {
     }
 
     private var borderColor: Color {
+        if node.step == .complete { return .green.opacity(0.7) }
         if placement.isActiveTip { return .accentColor }
         if isSelected { return .accentColor.opacity(0.6) }
         if placement.isOnActivePath { return .accentColor.opacity(0.35) }
@@ -387,6 +482,8 @@ struct WorkflowTimelineNodeCard: View {
         case .voiceover: "waveform"
         case .videos: "film.stack"
         case .clip: "film"
+        case .complete: "checkmark.seal.fill"
+        case .revision: "arrow.triangle.branch"
         }
     }
 

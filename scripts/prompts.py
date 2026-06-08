@@ -31,7 +31,23 @@ HOOK:
 [spoken lines]
 
 BODY:
-[spoken lines]
+REQUIRED: one short sentence per line — never one long paragraph.
+Order when the blog supports it:
+  1) Context / problem lines
+  2) EXPLAIN lines — one home-care or dosing instruction per line (before any signs block)
+  3) Signs intro line ending with a colon (e.g. "However, watch for serious signs:")
+  4) One warning sign per line (each becomes its own SIGNS clip)
+
+Example BODY shape (adapt facts to the blog; omit blocks the blog does not support):
+It's scary when a fever keeps coming back in a 7-month-old.
+Dress your baby lightly.
+Keep the room around 75 to 79 degrees.
+You can give acetaminophen every four hours.
+However, watch for serious signs:
+Fever lasting more than three days.
+Breathing that is rough, heavy, or rapid.
+Feeding less than half of normal.
+No wet diapers for over eight hours.
 
 RELIEF:
 [spoken lines]
@@ -171,7 +187,22 @@ HOOK:
 [spoken lines in Korean]
 
 BODY:
-[spoken lines in Korean]
+필수: 한 문장당 한 줄 — 긴 단락 금지.
+블로그 내용에 따라 순서:
+  1) 상황 설명
+  2) EXPLAIN 줄 — 홈케어/복용 지침은 한 줄에 하나 (위험 신호 블록 앞)
+  3) 위험 신호 도입 줄 + 콜론 (예: "다만, 이런 위험 신호가 보이면:")
+  4) 위험 신호는 한 줄에 하나
+
+예시 BODY 형태 (블로그에 맞게 수정; 해당 없으면 생략):
+7개월 아기 열이 반복되면 무섭습니다.
+아기에게 가벼운 옷을 입히세요.
+4시간마다 아세트아미노펜을 줄 수 있습니다.
+다만, 이런 위험 신호가 보이면:
+3일 넘게 열이 지속될 때.
+숨쉬기가 어렵거나 호흡이 빠를 때.
+평소 절반 이하로 수유할 때.
+8시간 넘게 소변을 보지 않을 때.
 
 RELIEF:
 [spoken lines in Korean]
@@ -213,7 +244,23 @@ HOOK:
 [spoken lines in Spanish]
 
 BODY:
-[spoken lines in Spanish]
+OBLIGATORIO: una oración corta por línea — nunca un párrafo largo.
+Orden cuando el blog lo permita:
+  1) Contexto / problema
+  2) Líneas EXPLAIN — una instrucción de cuidado o dosis por línea (antes del bloque de señales)
+  3) Línea de introducción a señales de alarma terminando en dos puntos (ej. "Pero, estate atento a estas señales de alarma:")
+  4) Una señal de alarma por línea (cada una = clip SIGNS)
+
+Ejemplo de forma del BODY (adapta al blog; omite bloques que no apliquen):
+Es preocupante cuando la fiebre regresa en un bebé de 7 meses.
+Viste al bebé con ropa ligera.
+Mantén la habitación entre 24 y 26 grados Celsius.
+Puede dar acetaminofén cada cuatro horas.
+Pero, estate atento a estas señales de alarma:
+Fiebre por más de tres días.
+Respiración rápida o dificultad para respirar.
+Toma menos de la mitad de lo habitual.
+Sin pañales mojados por más de ocho horas.
 
 RELIEF:
 [spoken lines in Spanish]

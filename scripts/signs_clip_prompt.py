@@ -131,15 +131,19 @@ def _split_sign_sentences(text: str) -> list[str]:
 
 
 def _inline_signs_from_line(line: str) -> list[str]:
-    """When 'watch for' and sign list share one BODY line, split after the colon."""
-    match = re.search(
-        r"(?:watch for|warning signs?|serious signs?).+?:\s*(.+)$",
-        line,
-        re.I,
-    )
-    if not match:
-        return []
-    return _split_sign_sentences(match.group(1))
+    """When signs intro and sign list share one BODY line, split after the colon."""
+    patterns = [
+        r"(?:watch for|warning signs?|serious signs?|danger signs?).+?:\s*(.+)$",
+        r"(?:señales?\s+de\s+alarma|signos?\s+de\s+alarma).+?:\s*(.+)$",
+        r"(?:estate\s+atento|presta\s+atencion|presta\s+atención).+?:\s*(.+)$",
+        r"(?:위험\s*신호|위험신호|이런\s*위험).+?:\s*(.+)$",
+        r"(?:다만.*?(?:신호|alarma)).+?:\s*(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, line, re.I)
+        if match:
+            return _split_sign_sentences(match.group(1))
+    return []
 
 
 def extract_warning_bullets(script: str) -> list[str]:
@@ -182,7 +186,8 @@ def extract_warning_bullets(script: str) -> list[str]:
             capturing = True
             bullets.extend(_inline_signs_from_line(line))
             continue
-        if re.search(r"watch for|warning sign|serious sign", line, re.I):
+        if re.search(r"watch for|warning sign|serious sign|señales? de alarma|signos? de alarma|"
+                     r"estate atento|위험\s*신호|위험신호", line, re.I):
             capturing = True
             bullets.extend(_inline_signs_from_line(line))
             continue

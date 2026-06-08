@@ -130,6 +130,46 @@ struct VideoProject: Identifiable, Hashable {
         FileManager.default.fileExists(atPath: clipsJSONURL.path)
     }
 
+    func hasScript(for language: ProjectLanguage) -> Bool {
+        if language == manifest.language { return hasScript }
+        return LanguageWorkspace.hasScript(in: LanguageWorkspace.directory(for: self, language: language))
+    }
+
+    func hasClipsJSON(for language: ProjectLanguage) -> Bool {
+        if language == manifest.language { return hasClipsJSON }
+        return LanguageWorkspace.hasClipsJSON(in: LanguageWorkspace.directory(for: self, language: language))
+    }
+
+    func hasVoiceover(for language: ProjectLanguage) -> Bool {
+        if language == manifest.language { return hasVoiceover }
+        return LanguageWorkspace.hasVoiceover(in: LanguageWorkspace.directory(for: self, language: language))
+    }
+
+    func hasAnyWork(for language: ProjectLanguage) -> Bool {
+        let langDir = LanguageWorkspace.directory(for: self, language: language)
+        if LanguageWorkspace.hasAnyWork(in: langDir) { return true }
+        if !loadWorkflowGraph(for: language).nodes.isEmpty { return true }
+        if language == manifest.language {
+            return hasScript || hasClipsJSON || hasVoiceover
+        }
+        return false
+    }
+
+    func loadClips(for language: ProjectLanguage) -> [ClipRecord] {
+        if language == manifest.language { return loadClips() }
+        return LanguageWorkspace.loadClips(from: LanguageWorkspace.directory(for: self, language: language))
+    }
+
+    func videoStatus(for language: ProjectLanguage, clips: [ClipRecord]) -> (done: Int, total: Int) {
+        if language == manifest.language { return videoStatus(for: clips) }
+        let dir = LanguageWorkspace.directory(for: self, language: language)
+        return LanguageWorkspace.videoStatus(for: dir, clips: clips)
+    }
+
+    func loadWorkflowGraph(for language: ProjectLanguage) -> WorkflowGraphFile {
+        WorkflowGraphManager(projectFolder: folderURL, language: language).load()
+    }
+
     var hasVoiceover: Bool {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: voiceoverURL.path),
               let size = attrs[.size] as? Int else { return false }

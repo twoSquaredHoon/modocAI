@@ -12,6 +12,7 @@ struct ProjectDetailView: View {
     enum DetailTab: String, CaseIterable, Identifiable {
         case workflow = "Workflow"
         case graph = "Graph"
+        case statistics = "Statistics"
         case script = "Script"
         case prompts = "Prompts"
         case voiceover = "Voiceover"
@@ -46,6 +47,8 @@ struct ProjectDetailView: View {
                     WorkflowView(project: current, actionError: $actionError)
                 case .graph:
                     WorkflowGraphView(project: current)
+                case .statistics:
+                    StatisticsView(project: current)
                 case .script:
                     ScriptReviewView(script: current.loadScript())
                 case .prompts:
@@ -72,6 +75,9 @@ struct ProjectDetailView: View {
         .onChange(of: project.id) { _, _ in
             selectedClipID = current.loadClips().first?.id
         }
+        .onChange(of: current.manifest.language) { _, _ in
+            selectedClipID = current.loadClips().first?.id
+        }
     }
 
     private var header: some View {
@@ -82,7 +88,7 @@ struct ProjectDetailView: View {
                     languagePicker
                 }
                 if showLanguageHint {
-                    Text("Language updated — Workflow: Regenerate script, then voiceover.")
+                    Text("\(current.manifest.language.shortLabel) has no saved work yet — workflow starts fresh. Run Script to begin.")
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -132,7 +138,7 @@ struct ProjectDetailView: View {
             set: { newLanguage in
                 let previous = current.manifest.language
                 store.setProjectLanguage(current, language: newLanguage)
-                showLanguageHint = previous != newLanguage
+                showLanguageHint = previous != newLanguage && !current.hasAnyWork(for: newLanguage)
             }
         )
     }
@@ -144,13 +150,21 @@ struct WorkflowView: View {
     @Binding var actionError: String?
 
     @State private var isWorking = false
+    @State private var confirmFinalize = false
 
     private var current: VideoProject {
         store.selectedProject ?? project
     }
 
+    private var activeLanguage: ProjectLanguage { current.manifest.language }
+    private var isFinalized: Bool { store.isLanguageFinalized(current, language: activeLanguage) }
+    private var pipelineSummary: PipelineLanguageSummary? {
+        PipelineTimeTracker.summaries(for: current).first { $0.language == activeLanguage }
+    }
+
     private var clips: [ClipRecord] { current.loadClips() }
     private var videoStatus: (done: Int, total: Int) { current.videoStatus(for: clips) }
+    private var languageHasWork: Bool { current.hasAnyWork(for: current.manifest.language) }
     private var videosComplete: Bool {
         videoStatus.total > 0 && videoStatus.done >= videoStatus.total
     }
@@ -172,7 +186,7 @@ struct WorkflowView: View {
                     number: 1,
                     title: "Script",
                     subtitle: "From blog URL · follows EN / KO / ES setting",
-                    done: current.hasScript,
+                    done: languageHasWork && current.hasScript,
                     active: store.pipeline.runningStep == .generateScript
                 ) {
                     runButton(
@@ -192,7 +206,7 @@ struct WorkflowView: View {
                     number: 2,
                     title: "Clip prompts",
                     subtitle: "Decisions + Veo prompts with consistent cast (matches EN/KO/ES)",
-                    done: current.hasClipsJSON,
+                    done: languageHasWork && current.hasClipsJSON,
                     active: store.pipeline.runningStep == .generatePrompts
                 ) {
                     runButton(
@@ -207,7 +221,7 @@ struct WorkflowView: View {
                     number: 3,
                     title: "Voiceover",
                     subtitle: "Gemini TTS timed to clip lengths",
-                    done: current.hasVoiceover,
+                    done: languageHasWork && current.hasVoiceover,
                     active: store.pipeline.runningStep == .generateVoiceover
                 ) {
                     runButton(
@@ -227,7 +241,7 @@ struct WorkflowView: View {
                     number: 4,
                     title: "Video clips",
                     subtitle: videoStatusLabel,
-                    done: videosComplete,
+                    done: languageHasWork && videosComplete,
                     active: store.pipeline.runningStep == .generateVideos
                         || isRegeneratingAnyClip
                         || store.pipeline.runningStep == .regenerateAllClips
@@ -252,9 +266,72 @@ struct WorkflowView: View {
                             .frame(minHeight: 120)
                     }
                 }
+
+                finalizeSection
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var finalizeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+            Text("Pipeline timing")
+                .font(.headline)
+            Text("Finalize when you are done reviewing this language version. Manual review time stops and totals appear in Statistics.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let summary = pipelineSummary, summary.stats.startedAt != nil {
+                HStack(spacing: 16) {
+                    timingChip("Automated", summary.totalAutomatedSeconds)
+                    timingChip("Review", summary.totalReviewSeconds)
+                    timingChip("Total", summary.totalPipelineSeconds)
+                }
+            }
+
+            HStack(spacing: 12) {
+                if isFinalized {
+                    Label("Finalized for \(activeLanguage.shortLabel)", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .font(.subheadline)
+                }
+
+                Button {
+                    confirmFinalize = true
+                } label: {
+                    Label(
+                        isFinalized ? "Re-finalize \(activeLanguage.shortLabel)" : "Finalize \(activeLanguage.shortLabel)",
+                        systemImage: "checkmark.seal"
+                    )
+                }
+                .disabled(store.pipeline.isRunning || isWorking)
+                .confirmationDialog(
+                    "Finalize pipeline for \(activeLanguage.shortLabel)?",
+                    isPresented: $confirmFinalize,
+                    titleVisibility: .visible
+                ) {
+                    Button("Finalize & stop review timer") {
+                        store.finalizePipelineLanguage(current, language: activeLanguage)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Closes any open manual review period and marks this language lane complete for KPI tracking. Running another step will reopen tracking.")
+                }
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+    }
+
+    private func timingChip(_ label: String, _ seconds: Double) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(PipelineDurationFormat.string(seconds: seconds))
+                .font(.caption.monospacedDigit().weight(.medium))
         }
     }
 

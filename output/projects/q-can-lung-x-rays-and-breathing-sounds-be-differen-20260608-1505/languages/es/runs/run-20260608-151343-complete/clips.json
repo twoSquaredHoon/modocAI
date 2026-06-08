@@ -1,0 +1,46 @@
+{
+  "clips": [
+    {
+      "id": "hook",
+      "label": "HOOK CLIP",
+      "detailed_prompt": "SUBJECT: A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans, is sitting on a sofa. A Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, is the primary parent. SETTING: A warm, lived-in US Hispanic/Latino household, with natural window light illuminating the scene. ACTION: The Latina woman parent gently places her ear on the back of the 7-year-old child. MOOD: Tense. CAMERA: Gentle handheld. LIGHTING: Dark and moody. STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.",
+      "veo_prompt": "A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans, is sitting on a sofa in a warm, lived-in US Hispanic/Latino household. A Latina woman in her early 30s, the primary parent, with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, gently places her ear on the child's back. The scene is captured with a gentle handheld camera, under dark and moody natural window light, creating a tense mood. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.",
+      "duration_seconds": 4
+    },
+    {
+      "id": "body_1",
+      "label": "BODY CLIP 1",
+      "detailed_prompt": "SUBJECT: A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans, is resting comfortably on a sofa. A Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, is the primary parent. SETTING: A warm, lived-in US Hispanic/Latino household, with natural window light. ACTION: The Latina woman parent looks with a caring expression at the 7-year-old child. MOOD: Neutral. CAMERA: Static shot. LIGHTING: Neutral. STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.",
+      "veo_prompt": "A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans, rests comfortably on a sofa in a warm, lived-in US Hispanic/Latino household. The primary parent, a Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, looks at the child with a caring expression. The shot is static, with neutral natural window light, conveying a neutral mood. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.",
+      "duration_seconds": 6
+    },
+    {
+      "id": "body_2",
+      "label": "BODY CLIP 2",
+      "detailed_prompt": "SUBJECT: A doctor (generic) and a Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, who is the primary parent. SETTING: A doctor's office or clinic. ACTION: The doctor points to an X-ray image on a light board, while the Latina woman parent listens attentively. MOOD: Neutral. CAMERA: Static shot. LIGHTING: Neutral. STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.",
+      "veo_prompt": "In a doctor's office or clinic, a generic doctor points to an X-ray image on a light board. The primary parent, a Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, listens attentively. The camera is static, with neutral lighting, setting a neutral mood. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.",
+      "duration_seconds": 6
+    },
+    {
+      "id": "body_3",
+      "label": "BODY CLIP 3",
+      "detailed_prompt": "SUBJECT: A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans. A Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, is the primary parent. A doctor (generic) is also present. SETTING: A doctor's office or clinic. ACTION: The doctor listens to the chest of the 7-year-old child using a stethoscope, while the Latina woman parent watches with a concerned expression. MOOD: Tense. CAMERA: Gentle handheld. LIGHTING: Neutral. STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.",
+      "veo_prompt": "A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans, is in a doctor's office or clinic. A generic doctor listens to the child's chest with a stethoscope. The primary parent, a Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, watches with a concerned expression. The scene is captured with a gentle handheld camera, under neutral lighting, creating a tense mood. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.",
+      "duration_seconds": 6
+    },
+    {
+      "id": "relief",
+      "label": "RELIEF CLIP",
+      "detailed_prompt": "SUBJECT: A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans. A Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee, is the primary parent. SETTING: A brightly lit doctor's office or clinic. ACTION: The Latina woman parent holds the hand of the 7-year-old child as they walk. MOOD: Relieved. CAMERA: Slow zoom in. LIGHTING: Bright and warm. STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.",
+      "veo_prompt": "A 7-year-old school-age child with warm medium-brown skin, dark brown eyes, dark brown hair, wearing a soft red cotton t-shirt and denim blue jeans, walks hand-in-hand with their primary parent. The parent is a Latina woman in her early 30s with warm medium-brown skin, dark brown wavy hair in a loose ponytail, dark brown eyes, wearing a soft terracotta cardigan over a white tee. They are walking into a brightly lit doctor's office or clinic. The camera performs a slow zoom in, with bright and warm lighting, conveying a relieved mood. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.",
+      "duration_seconds": 6
+    },
+    {
+      "id": "cta",
+      "label": "CTA CLIP",
+      "detailed_prompt": "SUBJECT: An inviting end frame with a question mark. SETTING: A clean, soft background consistent with a warm, lived-in US Hispanic/Latino household aesthetic. ACTION: The question mark is centrally displayed, encouraging viewer comments. MOOD: Warm. CAMERA: Static shot. LIGHTING: Bright and warm. STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen.",
+      "veo_prompt": "An inviting end frame featuring a prominent question mark, centrally displayed against a clean, soft background consistent with a warm, lived-in US Hispanic/Latino aesthetic. The static shot is brightly and warmly lit, encouraging viewer comments with a warm mood. Cinematic realistic footage, 4K, natural colors, no animation, no text on screen.",
+      "duration_seconds": 4
+    }
+  ]
+}

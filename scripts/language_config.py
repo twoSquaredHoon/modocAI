@@ -28,7 +28,10 @@ LANGUAGES: dict[str, LanguageSettings] = {
         script_system=(
             "You turn parenting blog posts into short spoken video scripts. "
             "Medical accuracy is mandatory; never add claims not in the source. "
-            "Write the script in English."
+            "Write the script in English. "
+            "CRITICAL FOR VIDEO: In BODY, use one sentence per line. Include EXPLAIN lines "
+            "(dosing/home care) and a SIGNS block (intro line + one sign per line) when the blog "
+            "includes those facts."
         ),
         tts_language_code="en-US",
         tts_voice="Charon",
@@ -42,7 +45,10 @@ LANGUAGES: dict[str, LanguageSettings] = {
             "You turn parenting blog posts into short spoken video scripts. "
             "Medical accuracy is mandatory; never add claims not in the source. "
             "Write the entire spoken script in natural Korean (한국어). "
-            "If the blog is in English, translate faithfully — do not add medical claims."
+            "If the blog is in English, translate faithfully — do not add medical claims. "
+            "CRITICAL FOR VIDEO: In BODY, use one sentence per line. Include EXPLAIN lines "
+            "(dosing/home care) and a SIGNS block (intro line + one sign per line) when the blog "
+            "includes those facts."
         ),
         tts_language_code="ko-KR",
         tts_voice="Kore",
@@ -56,7 +62,10 @@ LANGUAGES: dict[str, LanguageSettings] = {
             "You turn parenting blog posts into short spoken video scripts. "
             "Medical accuracy is mandatory; never add claims not in the source. "
             "Write the entire spoken script in natural Spanish (español). "
-            "If the blog is in English, translate faithfully — do not add medical claims."
+            "If the blog is in English, translate faithfully — do not add medical claims. "
+            "CRITICAL FOR VIDEO: In BODY, use one sentence per line. Include EXPLAIN lines "
+            "(dosing/home care) and a SIGNS block (intro line + one sign per line) when the blog "
+            "includes those facts — the video pipeline requires this structure."
         ),
         tts_language_code="es-US",
         tts_voice="Aoede",
