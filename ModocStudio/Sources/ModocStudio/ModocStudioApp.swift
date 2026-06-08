@@ -73,6 +73,10 @@ struct ModocStudioApp: App {
                     NewProjectSheet()
                         .environmentObject(store)
                 }
+                .sheet(isPresented: $store.showSetupSheet) {
+                    SetupSheet()
+                        .environmentObject(store)
+                }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -86,6 +90,14 @@ struct ModocStudioApp: App {
                     store.openExistingProject()
                 }
                 .keyboardShortcut("o", modifiers: .command)
+            }
+            CommandGroup(after: .appSettings) {
+                Button("Choose modocAI Folder…") {
+                    store.chooseModocRoot()
+                }
+                Button("Set Up Environment…") {
+                    store.showSetupSheet = true
+                }
             }
         }
     }

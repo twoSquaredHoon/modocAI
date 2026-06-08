@@ -6,7 +6,19 @@ Minimal SwiftUI app for the modocAI video pipeline: create projects from blog UR
 
 - macOS 14+
 - Xcode Command Line Tools / Swift 5.9+
-- modocAI repo set up (`./setup.sh`, `GEMINI_API_KEY` in `.env`)
+- Gemini API key in `.env` (for pipeline steps only)
+
+## Fresh install (once)
+
+```bash
+git clone … modocAI   # folder name modocAI recommended
+cd modocAI
+./setup.sh            # venv, .env, folders, app root path — run once
+# paste GEMINI_API_KEY into .env if needed
+./build-modoc-studio.sh
+```
+
+After that, only `./build-modoc-studio.sh` when you want to run the app.
 
 ## Run (recommended)
 

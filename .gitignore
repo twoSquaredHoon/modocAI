@@ -1,4 +1,5 @@
 .env
+.modoc-root
 .venv/
 venv/
 __pycache__/

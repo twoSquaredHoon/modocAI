@@ -1,18 +1,58 @@
 #!/usr/bin/env bash
+# One-time setup after clone: venv, .env, output folders, Modoc Studio root path.
+# Run once, then use ./build-modoc-studio.sh whenever you want the app.
 set -euo pipefail
-cd "$(dirname "$0")"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
 
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-  echo "Created .env — add your API key there."
+log() { echo "$@"; }
+warn() { echo "$@" >&2; }
+
+if ! command -v python3 &>/dev/null; then
+  warn "python3 not found. Install Xcode Command Line Tools: xcode-select --install"
+  exit 1
 fi
 
-python3 -m venv .venv
+# API key file (gitignored)
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  log "Created .env"
+fi
+
+# Python environment
+if [[ ! -d .venv ]]; then
+  log "Creating Python venv…"
+  python3 -m venv .venv
+fi
+.venv/bin/pip install -q -U pip
 .venv/bin/pip install -q -r requirements.txt
-echo "Done. Add your key to .env, then run:"
-echo "  ./clear-outputs.sh --yes   # reset outputs before a new blog"
-echo "  ./test-api.sh"
-echo "  ./blog-to-script.sh \"https://your-blog-url\""
-echo "  ./script-to-voiceover.sh output/scripts/your-script.txt"
-echo "  ./script-to-clips.sh output/scripts/your-script.txt"
-echo "  ./make-video.sh \"https://your-blog-url\""
+
+# Output folders (CLI + Modoc Studio projects)
+for d in output/projects output/scripts output/clips output/voiceovers; do
+  mkdir -p "$d"
+  [[ -f "$d/.gitkeep" ]] || touch "$d/.gitkeep"
+done
+
+# Shell scripts executable
+for sh in *.sh; do
+  [[ -f "$sh" ]] && chmod +x "$sh"
+done
+
+# Absolute repo path — Modoc Studio reads this on any machine after clone/rename
+echo "$ROOT" > .modoc-root
+
+# Register path for Modoc Studio (bundle id us.fevercoach.modoc-studio)
+if defaults write us.fevercoach.modoc-studio modocAIRootPath "$ROOT" 2>/dev/null; then
+  log "Registered modocAI root for Modoc Studio"
+else
+  log "Note: could not write UserDefaults (Modoc Studio will auto-detect from .modoc-root)"
+fi
+
+echo ""
+echo "✓ modocAI ready at $ROOT"
+if grep -qE '^GEMINI_API_KEY=.+' .env 2>/dev/null; then
+  echo "  Next: ./build-modoc-studio.sh"
+else
+  echo "  Next: paste GEMINI_API_KEY into .env, then ./build-modoc-studio.sh"
+  echo "  (The app opens without a key; pipeline steps need the key.)"
+fi

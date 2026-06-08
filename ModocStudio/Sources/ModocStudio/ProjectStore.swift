@@ -7,6 +7,7 @@ final class ProjectStore: ObservableObject {
     @Published var projects: [VideoProject] = []
     @Published var selectedProjectID: String?
     @Published var showNewProjectSheet = false
+    @Published var showSetupSheet = false
     @Published var pipeline = PipelineService()
 
     var selectedProject: VideoProject? {
@@ -15,11 +16,37 @@ final class ProjectStore: ObservableObject {
     }
 
     init() {
+        ModocConfig.bootstrap()
         refreshProjects()
+        if ModocConfig.needsSetup {
+            showSetupSheet = true
+        }
+    }
+
+    func chooseModocRoot() {
+        guard let root = ProjectFolderPicker.pickModocRoot() else { return }
+        ModocConfig.setRootURL(root)
+        refreshProjects()
+        if ModocConfig.needsSetup {
+            showSetupSheet = true
+        }
+    }
+
+    func openSetupInstructionsInTerminal() {
+        let path = ModocConfig.rootURL.path.replacingOccurrences(of: "'", with: "'\\''")
+        let source = "cd '\(path)' && ./setup.sh"
+        let script = "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"\(source)\""
+        var error: NSDictionary?
+        NSAppleScript(source: script)?.executeAndReturnError(&error)
     }
 
     func refreshProjects() {
-        try? FileManager.default.createDirectory(at: ModocConfig.projectsURL, withIntermediateDirectories: true)
+        do {
+            try ModocConfig.ensureProjectsDirectory()
+        } catch {
+            showSetupSheet = true
+            return
+        }
 
         var folderPaths = Set<String>()
 
@@ -173,11 +200,21 @@ final class ProjectStore: ObservableObject {
     }
 
     func createProject(blogURL: String, language: ProjectLanguage = .en) async throws {
+        if ModocConfig.needsSetup {
+            showSetupSheet = true
+            throw PipelineError.missingSetup
+        }
+
         let slug = VideoProject.slug(from: blogURL)
         let stamp = Self.timestamp()
         let folderName = "\(slug)-\(stamp)"
         let folder = ModocConfig.projectsURL.appendingPathComponent(folderName, isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        } catch {
+            showSetupSheet = true
+            throw PipelineError.cannotWriteProjects
+        }
 
         var manifest = ProjectManifest(
             id: folderName,

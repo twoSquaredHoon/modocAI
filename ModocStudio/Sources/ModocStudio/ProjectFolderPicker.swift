@@ -3,6 +3,28 @@ import Foundation
 
 enum ProjectFolderPicker {
     @MainActor
+    static func pickModocRoot(startingAt: URL? = nil) -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose your modocAI folder — the one that contains setup.sh and scripts/."
+        panel.prompt = "Use This Folder"
+        panel.directoryURL = startingAt ?? ModocConfig.rootURL.deletingLastPathComponent()
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        let root = url.standardizedFileURL
+        guard ModocConfig.looksLikeModocRoot(root) else {
+            showError(
+                "That folder does not look like modocAI.\n\n"
+                    + "Pick the repo root (contains setup.sh and scripts/)."
+            )
+            return nil
+        }
+        return root
+    }
+
+    @MainActor
     static func pickFolder(startingAt: URL? = nil) -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false

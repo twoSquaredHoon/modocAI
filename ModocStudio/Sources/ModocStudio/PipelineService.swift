@@ -163,12 +163,18 @@ final class PipelineService: ObservableObject {
 
 enum PipelineError: LocalizedError {
     case missingVenv
+    case missingSetup
+    case cannotWriteProjects
     case exitCode(Int)
 
     var errorDescription: String? {
         switch self {
         case .missingVenv:
             return "Python venv not found. Run ./setup.sh in the modocAI folder."
+        case .missingSetup:
+            return "Modoc Studio is not set up yet. Choose your modocAI folder first."
+        case .cannotWriteProjects:
+            return "Cannot save projects. Choose your modocAI folder or fix output/projects permissions."
         case .exitCode(let code):
             return "Pipeline step failed (exit \(code)). See log for details."
         }
