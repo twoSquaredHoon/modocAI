@@ -4,11 +4,13 @@
 venv/
 __pycache__/
 *.pyc
-output/*
-!output/scripts/
-!output/clips/
-!output/voiceovers/
-!output/projects/
+.DS_Store
+
+# AI-generated pipeline output (scripts, clips, logs, projects, etc.)
+# Keep folder structure via .gitkeep only — see setup.sh
+output/**
+!output/**/
 !output/**/.gitkeep
+
 ModocStudio/.build/
 ModocStudio.app/
