@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var store: ProjectStore
+    @State private var projectToDelete: VideoProject?
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,12 +39,50 @@ struct SidebarView: View {
                     ForEach(store.projects) { project in
                         ProjectRow(project: project)
                             .tag(project.id)
+                            .contextMenu {
+                                Button("Show in Finder") {
+                                    store.revealInFinder(project)
+                                }
+                                Divider()
+                                Button("Delete Project…", role: .destructive) {
+                                    projectToDelete = project
+                                }
+                                .disabled(store.pipeline.isRunning)
+                            }
                     }
                 }
             }
             .listStyle(.sidebar)
         }
         .navigationTitle("Modoc Studio")
+        .confirmationDialog(
+            "Delete “\(projectToDelete?.manifest.title ?? "project")”?",
+            isPresented: Binding(
+                get: { projectToDelete != nil },
+                set: { if !$0 { projectToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let project = projectToDelete {
+                    performDelete(project)
+                }
+                projectToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                projectToDelete = nil
+            }
+        } message: {
+            Text("The project folder and all scripts, clips, and videos will be moved to the Trash.")
+        }
+        .alert("Could not delete project", isPresented: Binding(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
+        }
         .toolbar {
             ToolbarItem {
                 Button {
@@ -52,6 +92,14 @@ struct SidebarView: View {
                 }
                 .help("Refresh projects")
             }
+        }
+    }
+
+    private func performDelete(_ project: VideoProject) {
+        do {
+            try store.deleteProject(project)
+        } catch {
+            deleteError = error.localizedDescription
         }
     }
 }
@@ -66,6 +114,7 @@ struct ProjectRow: View {
                 .font(.headline)
             HStack(spacing: 6) {
                 PhaseBadge(phase: project.manifest.phase)
+                LanguageBadge(language: project.manifest.language)
                 Text(project.manifest.id)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

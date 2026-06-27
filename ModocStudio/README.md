@@ -1,64 +1,55 @@
-# Modoc Studio (Mac prototype)
+# Modoc Studio
 
-Minimal SwiftUI app for the modocAI video pipeline: create projects from blog URLs, review script, generate clip prompts, generate Veo videos, and preview clips in-app.
+Mac app for the modocAI video pipeline: create projects from blog URLs, run pipeline steps, review outputs, and preview clips in-app.
+
+See the main [README.md](../README.md) for the full workflow overview.
 
 ## Requirements
 
 - macOS 14+
 - Xcode Command Line Tools / Swift 5.9+
-- Gemini API key in `.env` (for pipeline steps only)
+- `./setup.sh` completed in the modocAI repo root
+- `GEMINI_API_KEY` in `.env` (for pipeline steps only — app opens without it)
 
 ## Fresh install (once)
 
 ```bash
-git clone … modocAI   # folder name modocAI recommended
+git clone … modocAI
 cd modocAI
-./setup.sh            # venv, .env, folders, app root path — run once
-# paste GEMINI_API_KEY into .env if needed
+./setup.sh
+# paste GEMINI_API_KEY into .env
 ./build-modoc-studio.sh
 ```
 
-After that, only `./build-modoc-studio.sh` when you want to run the app.
-
-## Run (recommended)
-
-**Do not use `swift run` from Terminal** — keystrokes will go to Terminal, not the app.
-
-Build a proper `.app` and launch it:
+## Run the app
 
 ```bash
-cd /Users/seunghoon/Documents/2.Area/modocAI
+./build-modoc-studio.sh     # build + launch
+# or
 ./modoc-studio.sh
 ```
 
-This opens **Modoc Studio.app** in the Dock. Click the app window, then type in New Project.
+After setup, only `./build-modoc-studio.sh` is needed.
 
-**Open an existing project:** **File → Open Project…** (⌘O), or **Open Project…** in the sidebar. Pick any folder with `script.txt`, `clips.json`, or `project.json` — including legacy runs under `output/clips/…`.
+**Do not** use `swift run` from Terminal for normal use — keystrokes go to Terminal, not the app.
 
-### Or use Xcode
+If the setup sheet appears, choose the **modocAI repo root** (folder with `setup.sh` and `scripts/`). If it says Python is missing, run `./setup.sh` in Terminal first.
 
-```bash
-open ModocStudio/Package.swift
-```
+## App workflow
 
-Press **⌘R** to run. Same result — keyboard goes to the app.
+**Typical use:** `./daily-batch.sh` before bed → open Modoc Studio in the morning to review and fix.
 
-### Debug only (Terminal attached — typing may fail)
+The app can also **New Project** for a one-off URL (optional full auto pipeline in the sheet).
 
-```bash
-cd ModocStudio && swift run ModocStudio
-```
+1. **Open projects** — sidebar lists `output/projects/`; batch-created folders appear automatically after refresh.
+2. **Review tabs** — Article check · Script · Prompts · Voiceover · Clips
+3. **Workflow** — re-run steps or **Run remaining steps** if something failed
+4. **Statistics / Graph** — timing and version history
+5. **Finalize** — mark complete for KPI tracking
 
-## Flow
-
-1. **New Project** → paste blog URL → script generates automatically
-2. **Workflow** → review script → **Continue to clip prompts**
-3. Review prompts (Prompts tab) → **Generate videos (Veo, paid)**
-4. **Clips** tab → select clip → inline video preview
+One project = one language (set at create / in `urls.txt`). Separate projects per EN / KO / ES article.
 
 ## Project files
-
-Each project lives in one folder:
 
 ```
 output/projects/<slug>-<timestamp>/
@@ -67,20 +58,28 @@ output/projects/<slug>-<timestamp>/
   clip_decisions.txt
   clip_prompts.txt
   clips.json
+  voiceover.wav
   pipeline.log
+  pipeline_stats.json
+  workflow_graph.json
   videos/*.mp4
+  languages/{en|ko|es}/…
 ```
 
 ## Config
 
-Default modocAI root: `/Users/seunghoon/Documents/2.Area/modocAI`
+The app finds the modocAI root via:
 
-To change, set UserDefaults key `modocAIRootPath` (Settings UI can be added later).
+1. UserDefaults `modocAIRootPath` (set by `./setup.sh` or **Choose modocAI Folder…** in the menu)
+2. `.modoc-root` file in the repo (written by `./setup.sh`)
+3. Auto-detect when `ModocStudio.app` lives inside the repo
 
-## Open in Xcode (optional)
+Python used for pipeline steps: `{modocAI root}/.venv/bin/python`
+
+## Xcode (optional)
 
 ```bash
-open Package.swift
+open ModocStudio/Package.swift
 ```
 
-Run the **ModocStudio** scheme.
+Press **⌘R** to run.

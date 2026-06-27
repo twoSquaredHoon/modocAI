@@ -49,6 +49,9 @@ def clip_sort_key(clip_id: str) -> tuple:
         return (4, 0)
     if clip_id == "cta":
         return (5, 0)
+    if clip_id.startswith("custom_"):
+        num = clip_id.split("_", 1)[-1]
+        return (3, 500 + (int(num) if num.isdigit() else 0))
     return (99, 0)
 
 

@@ -379,6 +379,12 @@ enum PipelineTimeTracker {
             return ("regenerateAllClips", "Regenerate all clips", nil)
         case .regenerateClip(let id):
             return ("regenerateClip", "Regenerate clip: \(id)", id)
+        case .createCustomClip:
+            return ("createCustomClip", "Custom clip", nil)
+        case .verifyScript:
+            return ("verifyScript", "Script vs article", nil)
+        case .rewriteScriptLine(let id):
+            return ("rewriteScriptLine", "Rewrite line \(id)", nil)
         }
     }
 }

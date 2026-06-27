@@ -5,23 +5,20 @@ struct StatisticsView: View {
 
     @State private var statsFile: PipelineStatsFile = .empty()
     @State private var refreshTimer: Timer?
-    @State private var selectedLanguage: ProjectLanguage = .en
 
-    private var summaries: [PipelineLanguageSummary] {
-        PipelineTimeTracker.summaries(for: project)
-    }
+    private var projectLanguage: ProjectLanguage { project.manifest.language }
 
-    private var selectedSummary: PipelineLanguageSummary? {
-        summaries.first { $0.language == selectedLanguage }
+    private var summary: PipelineLanguageSummary? {
+        PipelineTimeTracker.summaries(for: project).first { $0.language == projectLanguage }
     }
 
     var body: some View {
         Group {
-            if statsFile.projectStartedAt == nil && summaries.allSatisfy({ $0.stats.startedAt == nil }) {
+            if statsFile.projectStartedAt == nil && summary?.stats.startedAt == nil {
                 ContentUnavailableView(
                     "No timing data yet",
                     systemImage: "chart.bar",
-                    description: Text("Run workflow steps or switch languages to start recording pipeline time.")
+                    description: Text("Run workflow steps to start recording pipeline time for this project.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -30,9 +27,8 @@ struct StatisticsView: View {
                     Divider()
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
-                            overviewCards
-                            languagePicker
-                            if let summary = selectedSummary {
+                            if let summary {
+                                overviewCard(summary)
                                 languageDetail(summary)
                             }
                         }
@@ -51,8 +47,11 @@ struct StatisticsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Pipeline statistics")
-                .font(.headline)
+            HStack(spacing: 8) {
+                Text("Pipeline statistics")
+                    .font(.headline)
+                LanguageBadge(language: projectLanguage)
+            }
             Text("Automated time = AI/pipeline runs. Manual review = your time between steps until the next run or Finalize.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -65,18 +64,10 @@ struct StatisticsView: View {
         .padding()
     }
 
-    private var overviewCards: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
-            ForEach(summaries) { summary in
-                overviewCard(summary)
-            }
-        }
-    }
-
     private func overviewCard(_ summary: PipelineLanguageSummary) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(summary.language.shortLabel)
+                Text(summary.language.displayName)
                     .font(.headline)
                 Spacer()
                 if summary.isFinalized {
@@ -102,26 +93,7 @@ struct StatisticsView: View {
                 .font(.subheadline.weight(.semibold))
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(summary.language == selectedLanguage
-                    ? Color.accentColor.opacity(0.08)
-                    : Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(summary.language == selectedLanguage ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1)
-        )
-        .onTapGesture { selectedLanguage = summary.language }
-    }
-
-    private var languagePicker: some View {
-        Picker("Language detail", selection: $selectedLanguage) {
-            ForEach(ProjectLanguage.allCases, id: \.self) { lang in
-                Text(lang.displayName).tag(lang)
-            }
-        }
-        .pickerStyle(.segmented)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
     }
 
     @ViewBuilder
@@ -130,7 +102,7 @@ struct StatisticsView: View {
 
         Group {
             if let started = stats.startedAt {
-                Text("Language work started: \(formatISO(started))")
+                Text("Work started: \(formatISO(started))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -163,15 +135,6 @@ struct StatisticsView: View {
             sectionTitle("Manual review periods")
             ForEach(stats.manualReviews) { review in
                 reviewRow(review)
-            }
-        }
-
-        if !stats.languageSwitches.isEmpty {
-            sectionTitle("Language switches (from this lane)")
-            ForEach(Array(stats.languageSwitches.enumerated()), id: \.offset) { _, sw in
-                Text("→ \(sw.toLanguage.uppercased()) at \(formatISO(sw.at))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -242,7 +205,6 @@ struct StatisticsView: View {
 
     private func reload() {
         statsFile = PipelineTimeTracker.load(for: project)
-        selectedLanguage = project.manifest.language
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             Task { @MainActor in

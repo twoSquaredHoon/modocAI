@@ -7,16 +7,22 @@ struct NewProjectSheet: View {
 
     @State private var urlText = ""
     @State private var language: ProjectLanguage = .en
+    @State private var runFullPipeline = true
+    @State private var includeVideos = true
     @State private var errorMessage: String?
     @State private var isCreating = false
     @State private var focusField = true
+
+    private var pipelineOptions: AutoPipelineOptions {
+        runFullPipeline ? .full(includeVideos: includeVideos) : .scriptOnly
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Project")
                 .font(.title2.bold())
 
-            Text("Paste a FeverCoach blog URL. The script generates automatically; you review before clip prompts and videos.")
+            Text("Paste a FeverCoach blog URL. Each project is one language — create separate projects for English, Korean, and Spanish articles.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -35,6 +41,28 @@ struct NewProjectSheet: View {
                 Text("Script and voiceover use this language. Clip prompts use matching family appearance (see visual_cast.txt).")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Run full pipeline automatically", isOn: $runFullPipeline)
+                    .disabled(isCreating)
+
+                if runFullPipeline {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Runs in order: \(AutoPipelineOptions.full(includeVideos: includeVideos).stepLabels.joined(separator: " → "))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Toggle("Generate Veo videos (paid API)", isOn: $includeVideos)
+                            .font(.caption)
+                            .disabled(isCreating)
+
+                        Text("Article check runs but does not auto-edit the script — review flagged lines afterward. You can remake clips when it finishes.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.leading, 4)
+                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -77,10 +105,16 @@ struct NewProjectSheet: View {
             }
 
             if isCreating || store.pipeline.isRunning {
-                HStack {
-                    ProgressView()
-                    Text("Generating script…")
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        ProgressView()
+                        Text(progressLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !store.pipeline.logText.isEmpty {
+                        LogView(log: store.pipeline.logText)
+                            .frame(maxHeight: 120)
+                    }
                 }
             }
 
@@ -88,7 +122,8 @@ struct NewProjectSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("Create & Generate Script") {
+                    .disabled(isCreating && store.pipeline.isRunning)
+                Button(createButtonTitle) {
                     Task { await create() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -96,14 +131,27 @@ struct NewProjectSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 540)
         .onAppear {
             focusField = true
         }
     }
 
+    private var createButtonTitle: String {
+        runFullPipeline ? "Create & Run Pipeline" : "Create & Generate Script"
+    }
+
+    private var progressLabel: String {
+        if let step = store.pipeline.runningStep {
+            return "Running: \(step.title)…"
+        }
+        return runFullPipeline ? "Starting pipeline…" : "Generating script…"
+    }
+
     private var canCreate: Bool {
-        !urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isCreating
+        !urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isCreating
+            && !store.pipeline.isRunning
     }
 
     private func pasteFromClipboard() {
@@ -126,7 +174,11 @@ struct NewProjectSheet: View {
         }
 
         do {
-            try await store.createProject(blogURL: url, language: language)
+            try await store.createProject(
+                blogURL: url,
+                language: language,
+                autoPipeline: pipelineOptions
+            )
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

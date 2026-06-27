@@ -78,6 +78,36 @@ final class PipelineService: ObservableObject {
                 script: "scripts/script_to_clips.py",
                 args: ["--resume", project.folderURL.path]
             )
+        case .createCustomClip(let linesFile, let generateVideo):
+            var args = [
+                project.folderURL.path,
+                "--lines-file", linesFile.path,
+                "--language", project.manifest.language.rawValue,
+            ]
+            if generateVideo {
+                args.append("--generate-video")
+            }
+            try await runPython(script: "scripts/create_custom_clip.py", args: args)
+        case .verifyScript:
+            try await runPython(
+                script: "scripts/compare_script_to_article.py",
+                args: [
+                    project.scriptURL.path,
+                    "--url", project.manifest.blogURL,
+                    "--output-dir", project.folderURL.path,
+                    "--language", project.manifest.language.rawValue,
+                ]
+            )
+        case .rewriteScriptLine(let lineID):
+            try await runPython(
+                script: "scripts/rewrite_script_line.py",
+                args: [
+                    project.scriptURL.path,
+                    "--line-id", lineID,
+                    "--output-dir", project.folderURL.path,
+                    "--language", project.manifest.language.rawValue,
+                ]
+            )
         }
 
         try appendToProjectLog(project: project)
@@ -102,6 +132,9 @@ final class PipelineService: ObservableObject {
         case generateVideos
         case regenerateClip(String)
         case regenerateAllClips
+        case createCustomClip(linesFile: URL, generateVideo: Bool)
+        case verifyScript
+        case rewriteScriptLine(String)
 
         var title: String {
             switch self {
@@ -111,6 +144,9 @@ final class PipelineService: ObservableObject {
             case .generateVideos: return "Generate Veo videos"
             case .regenerateClip(let id): return "Regenerate clip: \(id)"
             case .regenerateAllClips: return "Regenerate all clips"
+            case .createCustomClip: return "Create custom clip"
+            case .verifyScript: return "Script vs article"
+            case .rewriteScriptLine(let id): return "Rewrite script line \(id)"
             }
         }
     }

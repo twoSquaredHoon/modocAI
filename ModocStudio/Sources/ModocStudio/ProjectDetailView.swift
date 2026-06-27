@@ -7,17 +7,18 @@ struct ProjectDetailView: View {
     @State private var tab: DetailTab = .workflow
     @State private var selectedClipID: String?
     @State private var actionError: String?
-    @State private var showLanguageHint = false
+    @State private var confirmDeleteProject = false
 
     enum DetailTab: String, CaseIterable, Identifiable {
         case workflow = "Workflow"
-        case graph = "Graph"
-        case statistics = "Statistics"
         case script = "Script"
+        case articleCheck = "Article check"
         case prompts = "Prompts"
         case voiceover = "Voiceover"
         case clips = "Clips"
         case log = "Log"
+        case statistics = "Statistics"
+        case graph = "Graph"
 
         var id: String { rawValue }
     }
@@ -44,13 +45,19 @@ struct ProjectDetailView: View {
             Group {
                 switch tab {
                 case .workflow:
-                    WorkflowView(project: current, actionError: $actionError)
+                    WorkflowView(project: current, actionError: $actionError, selectedTab: $tab)
                 case .graph:
                     WorkflowGraphView(project: current)
                 case .statistics:
                     StatisticsView(project: current)
                 case .script:
-                    ScriptReviewView(script: current.loadScript())
+                    ScriptReviewView(
+                        project: current,
+                        script: current.loadScript(),
+                        clips: clips
+                    )
+                case .articleCheck:
+                    ScriptCheckView(project: current)
                 case .prompts:
                     PromptsView(decisions: current.loadDecisions(), clips: clips)
                 case .voiceover:
@@ -75,8 +82,25 @@ struct ProjectDetailView: View {
         .onChange(of: project.id) { _, _ in
             selectedClipID = current.loadClips().first?.id
         }
-        .onChange(of: current.manifest.language) { _, _ in
-            selectedClipID = current.loadClips().first?.id
+        .confirmationDialog(
+            "Delete “\(current.manifest.title)”?",
+            isPresented: $confirmDeleteProject,
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                deleteCurrentProject()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The project folder and all scripts, clips, and videos will be moved to the Trash.")
+        }
+    }
+
+    private func deleteCurrentProject() {
+        do {
+            try store.deleteProject(current)
+        } catch {
+            actionError = error.localizedDescription
         }
     }
 
@@ -85,12 +109,7 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     PhaseBadge(phase: current.manifest.phase)
-                    languagePicker
-                }
-                if showLanguageHint {
-                    Text("\(current.manifest.language.shortLabel) has no saved work yet — workflow starts fresh. Run Script to begin.")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                    LanguageBadge(language: current.manifest.language)
                 }
                 if let url = URL(string: current.manifest.blogURL) {
                     Link(current.manifest.blogURL, destination: url)
@@ -116,31 +135,28 @@ struct ProjectDetailView: View {
             } label: {
                 Label("Show in Finder", systemImage: "folder")
             }
+            Button(role: .destructive) {
+                confirmDeleteProject = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(store.pipeline.isRunning)
         }
         .padding()
     }
+}
 
-    private var languagePicker: some View {
-        Picker("Language", selection: languageBinding) {
-            ForEach(ProjectLanguage.allCases, id: \.self) { lang in
-                Text(lang.shortLabel).tag(lang)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(width: 140)
-        .disabled(store.pipeline.isRunning)
-    }
+struct LanguageBadge: View {
+    let language: ProjectLanguage
 
-    private var languageBinding: Binding<ProjectLanguage> {
-        Binding(
-            get: { current.manifest.language },
-            set: { newLanguage in
-                let previous = current.manifest.language
-                store.setProjectLanguage(current, language: newLanguage)
-                showLanguageHint = previous != newLanguage && !current.hasAnyWork(for: newLanguage)
-            }
-        )
+    var body: some View {
+        Text(language.shortLabel)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.secondary.opacity(0.15), in: Capsule())
+            .foregroundStyle(.secondary)
+            .help(language.displayName)
     }
 }
 
@@ -148,10 +164,16 @@ struct WorkflowView: View {
     @EnvironmentObject private var store: ProjectStore
     let project: VideoProject
     @Binding var actionError: String?
+    @Binding var selectedTab: ProjectDetailView.DetailTab
 
     @State private var isWorking = false
     @State private var confirmFinalize = false
+    @State private var autoIncludeVideos = true
+    @State private var confirmAutoPipeline = false
 
+    private var pendingAutoSteps: [PipelineService.PipelineStep] {
+        AutoPipelineOptions.full(includeVideos: autoIncludeVideos).pendingSteps(for: current)
+    }
     private var current: VideoProject {
         store.selectedProject ?? project
     }
@@ -182,12 +204,15 @@ struct WorkflowView: View {
                         .font(.callout)
                 }
 
+                autoPipelineSection
+
                 stepCard(
                     number: 1,
                     title: "Script",
-                    subtitle: "From blog URL · follows EN / KO / ES setting",
+                    subtitle: "From blog URL · \(current.manifest.language.displayName)",
                     done: languageHasWork && current.hasScript,
                     active: store.pipeline.runningStep == .generateScript
+                        || store.pipeline.runningStep == .verifyScript
                 ) {
                     runButton(
                         title: current.hasScript ? "Regenerate script" : "Generate script",
@@ -196,9 +221,25 @@ struct WorkflowView: View {
                         Task { await run(.generateScript) }
                     }
                     if current.hasScript {
-                        Text("Review in Script tab")
+                        Text("Review in Script tab · fact-check in Article check tab")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                    if current.hasScriptVerification, let v = current.loadScriptVerification() {
+                        Button {
+                            selectedTab = .articleCheck
+                        } label: {
+                            Label("Article check: \(v.verdict.label)", systemImage: v.verdict.icon)
+                                .font(.caption)
+                                .foregroundStyle(v.verdict.color)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    runButton(
+                        title: "Compare script to article",
+                        enabled: !current.manifest.blogURL.isEmpty && current.hasScript
+                    ) {
+                        Task { await run(.verifyScript, thenOpenArticleCheck: true) }
                     }
                 }
 
@@ -272,6 +313,52 @@ struct WorkflowView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var autoPipelineSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Auto pipeline")
+                .font(.headline)
+            Text("Run every remaining step in workflow order. Already-complete steps are skipped.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if pendingAutoSteps.isEmpty {
+                Label("All steps complete — review clips and voiceover, then remake anything you want.", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
+            } else {
+                Text("Will run: \(pendingAutoSteps.map(\.title).joined(separator: " → "))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Include Veo videos (paid API)", isOn: $autoIncludeVideos)
+                    .font(.caption)
+                    .disabled(store.pipeline.isRunning || isWorking)
+
+                Button {
+                    confirmAutoPipeline = true
+                } label: {
+                    Label("Run remaining steps", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.pipeline.isRunning || isWorking)
+                .confirmationDialog(
+                    "Run \(pendingAutoSteps.count) remaining pipeline step(s)?",
+                    isPresented: $confirmAutoPipeline,
+                    titleVisibility: .visible
+                ) {
+                    Button("Run pipeline") {
+                        Task { await runAutoPipeline() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(pendingAutoSteps.map(\.title).joined(separator: " → "))
+                }
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
     }
 
     private var finalizeSection: some View {
@@ -390,15 +477,36 @@ struct WorkflowView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
     }
 
-    private func run(_ step: PipelineService.PipelineStep) async {
+    private func runAutoPipeline() async {
+        actionError = nil
+        isWorking = true
+        defer { isWorking = false }
+        let p = store.selectedProject ?? project
+        do {
+            try await store.runAutoPipeline(
+                p,
+                options: .full(includeVideos: autoIncludeVideos)
+            )
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    private func run(_ step: PipelineService.PipelineStep, thenOpenArticleCheck: Bool = false) async {
         actionError = nil
         isWorking = true
         defer { isWorking = false }
         let p = store.selectedProject ?? project
         do {
             try await store.runWorkflowStep(p, step: step)
+            if thenOpenArticleCheck {
+                selectedTab = .articleCheck
+            }
         } catch {
             actionError = error.localizedDescription
+            if thenOpenArticleCheck {
+                selectedTab = .articleCheck
+            }
         }
     }
 

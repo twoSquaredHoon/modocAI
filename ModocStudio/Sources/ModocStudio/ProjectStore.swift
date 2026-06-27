@@ -199,7 +199,11 @@ final class ProjectStore: ObservableObject {
         }
     }
 
-    func createProject(blogURL: String, language: ProjectLanguage = .en) async throws {
+    func createProject(
+        blogURL: String,
+        language: ProjectLanguage = .en,
+        autoPipeline: AutoPipelineOptions = .scriptOnly
+    ) async throws {
         if ModocConfig.needsSetup {
             showSetupSheet = true
             throw PipelineError.missingSetup
@@ -216,7 +220,7 @@ final class ProjectStore: ObservableObject {
             throw PipelineError.cannotWriteProjects
         }
 
-        var manifest = ProjectManifest(
+        let manifest = ProjectManifest(
             id: folderName,
             title: slug.replacingOccurrences(of: "-", with: " ").capitalized,
             blogURL: blogURL,
@@ -234,32 +238,31 @@ final class ProjectStore: ObservableObject {
         refreshProjects()
         selectedProjectID = folder.path
 
-        let proj0 = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
-        var runId = ""
-        do {
-            runId = PipelineTimeTracker.beginAutomatedStep(project: proj0, step: .generateScript)
-            try await pipeline.runProjectStep(proj0, step: .generateScript)
-            PipelineTimeTracker.endAutomatedStep(project: proj0, runId: runId, success: true)
-            let script = (try? String(contentsOf: folder.appendingPathComponent("script.txt"), encoding: .utf8)) ?? ""
-            manifest.title = VideoProject.title(from: script)
-            manifest.phase = .scriptReview
-            manifest.lastError = nil
-            try saveManifest(manifest, folder: folder)
+        let project = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
+        try await runAutoPipeline(project, options: autoPipeline)
 
-            let proj = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
-            try recordGraphRun(project: proj, step: .generateScript, nodeLabel: "Script", success: true)
-            try? LanguageWorkspace.persistActive(proj, language: manifest.language)
-        } catch {
-            if !runId.isEmpty {
-                PipelineTimeTracker.endAutomatedStep(project: proj0, runId: runId, success: false)
-            }
-            manifest.phase = .failed
-            manifest.lastError = error.localizedDescription
-            try? saveManifest(manifest, folder: folder)
-            throw error
+        if let updated = loadProject(from: folder), updated.hasScript {
+            var finalManifest = updated.manifest
+            finalManifest.title = VideoProject.title(from: updated.loadScript())
+            try saveManifest(finalManifest, folder: folder)
         }
 
         refreshProjects()
+    }
+
+    /// Run pipeline steps in workflow order. Skips steps that are already complete.
+    func runAutoPipeline(_ project: VideoProject, options: AutoPipelineOptions) async throws {
+        guard !pipeline.isRunning else { throw AutoPipelineError.alreadyRunning }
+
+        let steps = options.pendingSteps(for: project)
+        guard !steps.isEmpty else { throw AutoPipelineError.nothingToRun }
+
+        for step in steps {
+            let current = projects.first { $0.id == project.id }
+                ?? loadProject(from: project.folderURL)
+                ?? project
+            try await runWorkflowStep(current, step: step)
+        }
     }
 
     func runWorkflowStep(_ project: VideoProject, step: PipelineService.PipelineStep) async throws {
@@ -306,6 +309,16 @@ final class ProjectStore: ObservableObject {
             for clip in project.loadClips() {
                 try? FileManager.default.removeItem(at: project.videoURL(for: clip.id))
             }
+        case .createCustomClip(_, let generateVideo):
+            if !project.hasClipsJSON {
+                manifest.phase = .generatingPrompts
+            } else if generateVideo {
+                manifest.phase = .generatingVideos
+            }
+        case .verifyScript:
+            break
+        case .rewriteScriptLine:
+            break
         }
 
         try saveManifest(manifest, folder: project.folderURL)
@@ -332,16 +345,23 @@ final class ProjectStore: ObservableObject {
             manifest.lastError = nil
 
             switch step {
-            case .generateScript:
+            case .generateScript, .verifyScript, .rewriteScriptLine:
                 manifest.phase = .scriptReview
+                if case .generateScript = step {
+                    manifest.title = VideoProject.title(from: updated.loadScript())
+                }
             case .generatePrompts:
                 manifest.phase = .promptsReview
             case .generateVoiceover:
                 manifest.phase = .voiceoverReview
-            case .generateVideos, .regenerateClip, .regenerateAllClips:
+            case .generateVideos, .regenerateClip, .regenerateAllClips, .createCustomClip:
                 let clips = updated.loadClips()
                 let status = updated.videoStatus(for: clips)
-                manifest.phase = (status.total > 0 && status.done >= status.total) ? .ready : .voiceoverReview
+                if updated.hasClipsJSON {
+                    manifest.phase = (status.total > 0 && status.done >= status.total) ? .ready : .promptsReview
+                } else {
+                    manifest.phase = .promptsReview
+                }
             }
 
             try saveManifest(manifest, folder: project.folderURL)
@@ -432,7 +452,92 @@ final class ProjectStore: ObservableObject {
             return (.videos, "Regenerate all clips", nil)
         case .regenerateClip(let id):
             return (.clip, "Clip: \(id)", id)
+        case .createCustomClip:
+            return (.clip, "Custom clip", nil)
+        case .verifyScript:
+            return (.script, "Script verification", nil)
+        case .rewriteScriptLine(let id):
+            return (.script, "Rewrite line \(id)", nil)
         }
+    }
+
+    func verifyScript(_ project: VideoProject) async throws {
+        try await runWorkflowStep(project, step: .verifyScript)
+    }
+
+    func dismissScriptLine(_ project: VideoProject, lineID: String) throws {
+        guard !pipeline.isRunning else { throw ScriptEditError.pipelineBusy }
+        let latest = projects.first { $0.id == project.id } ?? project
+        let script = latest.loadScript()
+        guard let updated = ScriptEditor.removeLine(lineID: lineID, from: script) else {
+            throw ScriptEditError.lineNotFound(lineID)
+        }
+        try latest.saveScript(updated)
+        try latest.clearScriptVerificationFiles()
+        refreshProjects()
+    }
+
+    func rewriteScriptLine(_ project: VideoProject, lineID: String) async throws -> ScriptLineEditResult {
+        try await runWorkflowStep(project, step: .rewriteScriptLine(lineID))
+        let latest = projects.first { $0.id == project.id } ?? project
+        try latest.clearScriptVerificationFiles()
+        refreshProjects()
+        guard let result = latest.loadLastScriptLineEdit() else {
+            throw ScriptEditError.lineNotFound(lineID)
+        }
+        return result
+    }
+
+    func disregardVerificationIssue(_ project: VideoProject, lineID: String) throws {
+        let latest = projects.first { $0.id == project.id } ?? project
+        guard let report = latest.loadScriptVerification() else { return }
+        var disregarded = latest.loadVerificationOverrides(for: report)
+        disregarded.insert(lineID)
+        let overrides = ScriptVerificationOverrides(
+            verifiedAt: report.verifiedAt ?? "",
+            disregardedLineIDs: disregarded.sorted()
+        )
+        try latest.saveVerificationOverrides(overrides)
+        refreshProjects()
+    }
+
+    func restoreVerificationIssue(_ project: VideoProject, lineID: String) throws {
+        let latest = projects.first { $0.id == project.id } ?? project
+        guard let report = latest.loadScriptVerification() else { return }
+        var disregarded = latest.loadVerificationOverrides(for: report)
+        disregarded.remove(lineID)
+        if disregarded.isEmpty {
+            try latest.clearVerificationOverrides()
+        } else {
+            let overrides = ScriptVerificationOverrides(
+                verifiedAt: report.verifiedAt ?? "",
+                disregardedLineIDs: disregarded.sorted()
+            )
+            try latest.saveVerificationOverrides(overrides)
+        }
+        refreshProjects()
+    }
+
+    func createCustomClip(
+        _ project: VideoProject,
+        lines: [String],
+        generateVideo: Bool
+    ) async throws -> String {
+        let linesFile = project.folderURL.appendingPathComponent(".custom_clip_lines.txt")
+        try lines.joined(separator: "\n").write(to: linesFile, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: linesFile) }
+
+        let beforeIDs = Set(project.loadClips().map(\.id))
+        try await runWorkflowStep(
+            project,
+            step: .createCustomClip(linesFile: linesFile, generateVideo: generateVideo)
+        )
+
+        let after = loadProject(from: project.folderURL)?.loadClips() ?? []
+        if let created = after.first(where: { $0.id.hasPrefix("custom_") && !beforeIDs.contains($0.id) }) {
+            return created.id
+        }
+        return after.last(where: { $0.id.hasPrefix("custom_") })?.id ?? "custom"
     }
 
     func proceedToPrompts(project: VideoProject) async throws {
@@ -490,10 +595,48 @@ final class ProjectStore: ObservableObject {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.folderURL.path)
     }
 
+    func deleteProject(_ project: VideoProject) throws {
+        if pipeline.isRunning {
+            throw ProjectDeleteError.pipelineRunning
+        }
+
+        let folder = project.folderURL.standardizedFileURL
+        guard FileManager.default.fileExists(atPath: folder.path) else {
+            unregisterProjectPath(folder)
+            refreshProjects()
+            return
+        }
+
+        var trashedURL: NSURL?
+        try FileManager.default.trashItem(at: folder, resultingItemURL: &trashedURL)
+        unregisterProjectPath(folder)
+
+        if selectedProjectID == project.id {
+            selectedProjectID = nil
+        }
+        refreshProjects()
+    }
+
+    private func unregisterProjectPath(_ folder: URL) {
+        let path = folder.standardizedFileURL.path
+        ModocConfig.openedProjectPaths = ModocConfig.openedProjectPaths.filter { $0 != path }
+    }
+
     private static func timestamp() -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyyMMdd-HHmm"
         return f.string(from: Date())
+    }
+}
+
+enum ProjectDeleteError: LocalizedError {
+    case pipelineRunning
+
+    var errorDescription: String? {
+        switch self {
+        case .pipelineRunning:
+            return "Wait for the current pipeline step to finish before deleting this project."
+        }
     }
 }
 

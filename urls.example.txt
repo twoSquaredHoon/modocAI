@@ -1,0 +1,6 @@
+# One blog URL per line. Lines starting with # are ignored.
+# Optional language after a comma (en, ko, es). Default is en unless you pass --language to batch-run.sh.
+
+# https://www.fevercoach.us/post/your-article-slug
+# https://www.fevercoach.us/post/another-post,ko
+# https://www.fevercoach.us/post/spanish-version,es

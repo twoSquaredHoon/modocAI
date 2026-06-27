@@ -19,7 +19,16 @@ if [[ ! -f .env ]]; then
   log "Created .env"
 fi
 
-# Python environment
+# Python environment (recreate if copied from another machine or Python was upgraded)
+venv_usable() {
+  [[ -x .venv/bin/python ]] && .venv/bin/python -c "import sys" &>/dev/null
+}
+
+if [[ -d .venv ]] && ! venv_usable; then
+  warn "Broken .venv (Python interpreter missing). Recreating…"
+  rm -rf .venv
+fi
+
 if [[ ! -d .venv ]]; then
   log "Creating Python venv…"
   python3 -m venv .venv

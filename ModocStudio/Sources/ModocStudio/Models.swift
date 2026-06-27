@@ -199,6 +199,7 @@ struct VideoProject: Identifiable, Hashable {
         if id.hasPrefix("signs_"), let n = Int(id.dropFirst(6)) { return (3, n) }
         if id == "relief" { return (4, 0) }
         if id == "cta" { return (5, 0) }
+        if id.hasPrefix("custom_"), let n = Int(id.dropFirst(7)) { return (3, 500 + n) }
         return (99, 0)
     }
 

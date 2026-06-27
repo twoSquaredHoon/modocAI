@@ -1,120 +1,276 @@
-**Modoc AI (Main project):** Decrease concern of parents
+# Modoc AI
 
-**Parenting Laboratory (the project that we are working on):**
-Send parenting information of young children in short form videos
-**Task:**
-Create medically accurate videos with the least amount of effort
+**Mission:** Medically accurate short-form parenting health videos for young children — with minimum human effort.
 
-**Measure:**
-(Views) / (work time)
-Rule: BE MEDICALLY ACCURATE nothing else.
+**Rule:** Be medically accurate. Scripts and clips must match the source blog, not invent facts.
 
-**Channel**
-Youtube: [https://www.youtube.com/channel/UCMWz3D-NhAVQyxGvbRZTblw](https://www.youtube.com/channel/UCMWz3D-NhAVQyxGvbRZTblw)
-Instagram
-Facebook
-Blog imbed
+**KPI:** Views ÷ pipeline work time (see [docs/KPI_RATING_FORM.md](docs/KPI_RATING_FORM.md))
 
-**Workflow**
+**Channels:** [YouTube](https://www.youtube.com/channel/UCMWz3D-NhAVQyxGvbRZTblw) · Instagram · Facebook · MoDoc blog embed
 
-See **[WORKFLOW.md](WORKFLOW.md)** for step-by-step commands (setup, script, voiceover, clips, resume).
+---
 
-1. Copy the blog post, make the script
+## How it works
 
-**Automated (blog URL → script):** Paste your Gemini API key in `.env`, then run:
+Modoc AI is two parts:
+
+| Part | What it does |
+|------|----------------|
+| **Modoc Studio** (Mac app) | Review & edit projects — script check, clips, voiceover, regenerate; optional single-project create |
+| **Python pipeline** (`scripts/`) | Blog → script → article check → clip prompts → voiceover → Veo (CLI + overnight batch) |
+
+The app calls the same Python scripts you can run from Terminal. Everything is stored as files on disk — no database.
+
+```
+Blog URL (FeverCoach)
+        │
+        ▼
+   ① Script          Gemini text — HOOK / BODY / EXPLAIN / SIGNS / RELIEF / CTA
+        │
+        ▼
+   ② Clip prompts    Gemini decides what to show + writes Veo prompts (consistent cast)
+        │
+        ▼
+   ③ Voiceover       Gemini TTS — paced to clip lengths
+        │
+        ▼
+   ④ Video clips     Veo — one .mp4 per clip (hook, body, explain, signs, relief, cta)
+        │
+        ▼
+   ⑤ Edit & publish  Manual — CapCut, Premiere, YouTube / IG / FB
+```
+
+**Clip order:** `hook` → `body_1`, `body_2`, … → `explain_1`, … → `signs_1`, … → `relief` → `cta`  
+**Durations:** 4s (hook, explain, signs, cta) · 6s (body, relief)
+
+**Languages:** English, Korean, Spanish — separate workspace per language under each project (`languages/en`, `ko`, `es`).
+
+---
+
+## Setup (once per machine)
+
 ```bash
-./setup.sh   # once
-./blog-to-script.sh "https://your-blog-post-url"
-```
-Saves to `output/scripts/`. Uses the script rules below via Gemini.
-
-**Manual prompt (paste blog text into Gemini/Chat):**
-```
-**SCRIPT RULES:**
-_No medical jargon. Short sentences only. Written to be SPOKEN out loud. Under 45 seconds total when read aloud._
-
-_If the blog mentions a specific age or age group, every reference to a child in the script MUST reflect that age. If no age is mentioned, default to school age children 5-12._
-
-_When writing each section keep the visuals in mind:_
-- _HOOK (0–3 seconds): Start with a terrifying but true statement that makes any parent think their child is in danger RIGHT NOW. Use phrases like 'If your child does this, stop everything', 'Most parents have no idea this is happening to their child', 'This everyday habit could be silently harming your kid'. The hook must feel urgent and personal — not generic._
-- _BODY (3–35 seconds): Reveal the problem clearly. Use short punchy sentences. One idea per line. Make the parent feel like they are learning something their doctor never told them. Build the tension slightly before releasing it._
-- _RELIEF (35–42 seconds): Briefly name the warning signs again in short form, then clear action — ER if those signs, otherwise doctor today. Do not say "if you see these" without listing what "these" are._
-- _CTA (last 3 seconds): End with a comment-bait question like 'Has your child ever done this? Drop a comment below' or 'Tag a parent who needs to see this'._
+git clone <repo-url> modocAI
+cd modocAI
+./setup.sh                  # Python venv, .env, output folders, app path
 ```
 
-2. Voiceover (script → audio)
+Add your Gemini API key to `.env`:
 
-**Automated (Gemini TTS, same API key in `.env`):** Pace defaults to **auto** — speeds up speech to match total video length.
+```
+GEMINI_API_KEY=your-key-here
+```
+
+Get a key at https://aistudio.google.com/apikey (Veo video needs billing on your Google account).
+
+Verify (optional):
+
 ```bash
-./script-to-voiceover.sh output/scripts/your-script-20260527.txt
-```
-Best with clip timings: `--clips-dir output/clips/your-run-folder` (after `--prompts-only` or full clips run).
-
-**Manual:** [AI Studio speech](https://aistudio.google.com/generate-speech) — paste script, adjust speed under 1 minute.
-
-3. Clips prompts
-- **STEP 1 — Clip decision prompt** Feed the script in and it decides what clips are needed based purely on what the script is saying. No visual rules yet, just "what should we see here."
-```
- "You are a video director. Read the script below and decide what video clips are needed to visually support what is being said. Base your decisions ONLY on what the script is describing — do not add creative interpretation.
-For each section of the script output one clip description. The description should answer only one question: WHAT should the viewer see at this moment?
-Rules: No camera angles No lighting instructions No style directions Just describe the subject, the setting, and what is happening If the script mentions a specific age, the clip must reflect that age_ Keep each description to one clear sentence
-
-_Format it as:_ _HOOK CLIP_ → _BODY CLIP 1_ → _BODY CLIP 2_ → _SIGNS CLIP_ (“look for these signs” / warning list) → _RELIEF CLIP_ → _CTA CLIP_
+./test-api.sh               # free — text + list models
+./test-video.sh             # paid — one short Veo test clip
 ```
 
+If `./setup.sh` fails with a broken venv (`bad interpreter`), it will recreate `.venv` automatically. You can also run `rm -rf .venv && ./setup.sh`.
 
-**STEP 2 — Clip description prompt** Take those decided clips and turn them into very specific detailed prompts ready to paste into Runway or Kling.
-```
-_"You are an AI video prompt specialist. Take the clip descriptions below and turn each one into a detailed AI video generation prompt ready to paste into Runway or Kling._
+---
 
-_Every prompt must include:_
+## Run the app
 
-_SUBJECT: Who or what is in the shot. Be very specific — include age, appearance, clothing, expression, and body language._
+**First time after setup:**
 
-_SETTING: Where exactly is this happening. Describe the environment in detail — room size, objects visible, background details._
-
-_ACTION: What is physically happening in the shot. Be precise — not 'child looks sick' but 'child lying on couch eyes half closed head resting on pillow blanket pulled up to chin'_
-
-_MOOD: One word only — Tense, Neutral, Warm, Relieved_
-
-_CAMERA: Static shot / Slow zoom in / Gentle handheld_
-
-_LIGHTING: Dark and moody for hook / Neutral for body / Bright and warm for relief and CTA_
-
-_STYLE: Cinematic realistic footage. 4K. Natural colors. No animation. No text on screen._
-
-_Rules:- Never use vague words like "looks sick" or "seems worried" — describe exact physical details
-- If a child is mentioned, include exact age range
-- Each prompt must be self-contained and ready to paste directly into Runway or Kling with no editing
-- Keep it under 480 tokens (~360 words / 3-4 sentences)
-
-_Clip descriptions: [paste Step 1 output here]"_
-```
-
-
-**STEP 3 — You generate the clips**
-
-**Automated (script → prompts → Veo clips):**
 ```bash
-./script-to-clips.sh output/scripts/your-script-20260527.txt
+./build-modoc-studio.sh
 ```
-Writes `output/clips/<name>/` with `clip_decisions.txt`, `clip_prompts.txt`, and `videos/*.mp4`.
 
-Preview prompts only (no Veo charges):
+**Every time after that:**
+
 ```bash
-./script-to-clips.sh output/scripts/your-script-20260527.txt --prompts-only
+./build-modoc-studio.sh     # or ./modoc-studio.sh
 ```
 
-If generation stops partway, resume (skips clips already saved):
+Do **not** use `swift run` from Terminal for normal use — keyboard focus goes to Terminal, not the app.
+
+On first launch, if prompted, choose the **modocAI repo root** (the folder containing `setup.sh` and `scripts/`).
+
+More app details: [ModocStudio/README.md](ModocStudio/README.md)
+
+---
+
+## Workflow in Modoc Studio (review & edit)
+
+Modoc Studio is mainly for **reviewing and fixing** work produced by the pipeline. You can still create a single project from the app if you want.
+
+1. Open projects from the sidebar (or **Open Existing Project** → `output/projects/...`).
+2. **Article check** — verify script vs blog; rewrite, remove, or disregard flagged lines.
+3. **Script** — select lines for custom clips.
+4. **Clips** — preview videos; regenerate individual clips.
+5. **Voiceover** — listen and compare.
+6. **Workflow** — re-run any step or **Run remaining steps** if batch stopped partway.
+7. **Statistics / Graph** — timing and version history.
+8. **Edit & publish** — export `voiceover.wav` + `videos/*.mp4` to CapCut etc.
+
+One project = one language. Create separate projects (or batch jobs) for EN / KO / ES articles.
+
+---
+
+## Overnight batch (bulk generation)
+
+Run several articles **one after another** from Terminal while you sleep. Projects appear in Modoc Studio the next morning.
+
+### Daily EN + KO (recommended)
+
+Each run fetches posts **published in the last 24 hours** from both indexes, skips articles already in `output/processed_articles.json`, then runs the pipeline:
+
 ```bash
-./script-to-clips.sh --resume output/clips/your-run-folder
-# or re-run the same script path — it auto-continues the latest incomplete run
-./script-to-clips.sh output/scripts/your-script-20260527.txt
+./daily-batch.sh
 ```
 
-**Full pipeline (blog URL → script → clips):**
+Registry: `output/processed_articles.json` — one entry per blog URL so the same article is never processed twice. Existing projects are imported into the registry automatically on first run.
+
+Or step by step:
+
 ```bash
-./make-video.sh "https://your-blog-post-url"
+./fetch-daily-urls.sh          # → urls.txt (last 24h, EN + KO, skip processed)
+./batch-run.sh urls.txt        # sequential full pipeline; registers each URL when done
 ```
 
-**Manual:** Paste Step 1 output into Step 2, then generate in Runway/Kling.
+Blog indexes:
+- English: https://www.fevercoach.us/blog
+- Korean: https://www.fevercoach.us/ko/blog
+
+Options:
+
+```bash
+./fetch-daily-urls.sh --since-hours 36   # wider window if you missed a day
+./batch-run.sh urls.txt --skip-videos
+```
+
+**Testing one article:** see [docs/BATCH-COMMANDS.md](docs/BATCH-COMMANDS.md)
+
+```bash
+./batch-one.sh                  # newest EN post → full pipeline
+./batch-one.sh --skip-videos    # same, no Veo
+./fetch-latest.sh --en-only     # fetch only, no pipeline
+```
+
+Schedule the same time daily (example macOS `launchd` — run at 2am):
+
+```bash
+# ~/Library/LaunchAgents/us.fevercoach.modoc.daily.plist → cd modocAI && ./daily-batch.sh
+```
+
+Manual URL list (optional):
+
+```bash
+cp urls.example.txt urls.txt
+# edit urls.txt — one URL per line (optional: url,ko)
+
+./batch-run.sh urls.txt
+```
+
+Each project runs: **Script → Article check → Clip prompts → Voiceover → Veo videos** (same as the app’s full auto pipeline).
+
+| Flag | Meaning |
+|------|---------|
+| `--limit 5` | Process at most 5 URLs |
+| `--skip-videos` | Stop before paid Veo generation |
+| `--skip-article-check` | Skip Gemini script vs article step |
+| `--language ko` | Default language when not on the line |
+
+Logs: `output/batch/batch-<timestamp>.log` and `batch-<timestamp>-summary.json`
+
+---
+
+## Workflow from Terminal (single project CLI)
+
+Same pipeline without the app. See **[WORKFLOW.md](WORKFLOW.md)** for full commands.
+
+```bash
+# 1 — Script
+./blog-to-script.sh "https://www.fevercoach.us/post/your-post"
+
+# 2 — Clip prompts (no Veo cost)
+./script-to-clips.sh output/scripts/<your-script>.txt --prompts-only
+
+# 3 — Voiceover (best after prompts exist)
+./script-to-voiceover.sh output/scripts/<your-script>.txt \
+  --clips-dir output/projects/<your-project-folder>
+
+# 4 — Veo videos (paid; resumes if interrupted)
+./script-to-clips.sh --resume output/projects/<your-project-folder>
+```
+
+Shortcut — blog → script → clips (no voiceover):
+
+```bash
+./make-video.sh "https://your-blog-url"
+```
+
+List real file paths (don't guess names):
+
+```bash
+./list-outputs.sh
+```
+
+---
+
+## Where things live
+
+### Repo layout
+
+```
+modocAI/
+  .env                 # API key (gitignored)
+  setup.sh             # one-time environment setup
+  build-modoc-studio.sh
+  scripts/             # Python pipeline
+  ModocStudio/         # SwiftUI app source
+  ModocStudio.app      # built app (gitignored)
+  output/              # generated content (gitignored except .gitkeep)
+```
+
+### Project folder (Modoc Studio)
+
+```
+output/projects/<slug>-<timestamp>/
+  project.json
+  script.txt
+  clip_decisions.txt
+  clip_prompts.txt
+  clips.json
+  voiceover.wav
+  pipeline.log
+  pipeline_stats.json
+  videos/*.mp4
+  languages/
+    en/   …
+    ko/   …
+    es/   …
+```
+
+AI-generated output under `output/` is **not committed to git**.
+
+---
+
+## Script & prompt rules (source of truth)
+
+Script generation rules live in code, not in this README:
+
+| File | Contents |
+|------|----------|
+| [scripts/prompts.py](scripts/prompts.py) | `SCRIPT_RULES`, `SCRIPT_RULES_KO`, `SCRIPT_RULES_ES` + clip prompts |
+| [scripts/language_config.py](scripts/language_config.py) | Per-language TTS voice and system instructions |
+| [scripts/blog_to_script.py](scripts/blog_to_script.py) | Blog fetch + Gemini script call |
+
+Edit `scripts/prompts.py` to change how scripts and clips are written.
+
+---
+
+## More docs
+
+| Doc | Contents |
+|-----|----------|
+| [WORKFLOW.md](WORKFLOW.md) | CLI commands, resume, options |
+| [ModocStudio/README.md](ModocStudio/README.md) | App build, tabs, config |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Full system requirements |
+| [docs/KPI_RATING_FORM.md](docs/KPI_RATING_FORM.md) | Weekly KPI logging |

@@ -34,7 +34,7 @@ struct WorkflowGraphView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Version timeline")
                 .font(.headline)
-            Text("Three lanes — EN, KO, ES. A **Complete workflow** node (full snapshot) is created when all four steps finish. After that, every change is saved as a **Change** revision with all artifacts.")
+            Text("Version timeline for this project (\(current.manifest.language.shortLabel)). **Complete workflow** is recorded when all four steps finish. Later edits are saved as **Change** revisions with full snapshots.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
@@ -94,15 +94,12 @@ struct WorkflowGraphView: View {
 
     private func reloadGraph() {
         let p = current
-        var loaded: [ProjectLanguage: WorkflowGraphFile] = [:]
-        for lang in ProjectLanguage.allCases {
-            let manager = WorkflowGraphManager(projectFolder: p.folderURL, language: lang)
-            try? manager.ensureGraphFromLegacy(project: p)
-            loaded[lang] = p.loadWorkflowGraph(for: lang)
-        }
-        graphsByLanguage = loaded
+        let lang = p.manifest.language
+        let manager = WorkflowGraphManager(projectFolder: p.folderURL, language: lang)
+        try? manager.ensureGraphFromLegacy(project: p)
+        graphsByLanguage = [lang: p.loadWorkflowGraph(for: lang)]
         if selectedNodeId == nil {
-            selectedNodeId = loaded[p.manifest.language]?.activeNodeId
+            selectedNodeId = graphsByLanguage[lang]?.activeNodeId
         }
     }
 
