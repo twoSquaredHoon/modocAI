@@ -81,6 +81,7 @@ struct ModocStudioApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Project…") {
+                    store.appSection = .pipeline
                     store.showNewProjectSheet = true
                 }
                 .keyboardShortcut("n", modifiers: .command)
@@ -90,6 +91,10 @@ struct ModocStudioApp: App {
                     store.openExistingProject()
                 }
                 .keyboardShortcut("o", modifiers: .command)
+                Button("Go Home") {
+                    store.goHome()
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
             }
             CommandGroup(after: .appSettings) {
                 Button("Choose modocAI Folder…") {

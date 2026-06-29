@@ -54,7 +54,7 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
         }
-        .navigationTitle("Modoc Studio")
+        .navigationTitle("Projects")
         .confirmationDialog(
             "Delete “\(projectToDelete?.manifest.title ?? "project")”?",
             isPresented: Binding(

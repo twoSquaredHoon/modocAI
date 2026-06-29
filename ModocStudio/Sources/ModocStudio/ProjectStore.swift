@@ -6,6 +6,9 @@ import AppKit
 final class ProjectStore: ObservableObject {
     @Published var projects: [VideoProject] = []
     @Published var selectedProjectID: String?
+    @Published var appSection: AppSection = .home
+    @Published var browseSelectedDateFolder: String?
+    @Published var browseSelectedLanguageFolder: String?
     @Published var showNewProjectSheet = false
     @Published var showSetupSheet = false
     @Published var pipeline = PipelineService()
@@ -17,10 +20,229 @@ final class ProjectStore: ObservableObject {
 
     init() {
         ModocConfig.bootstrap()
-        refreshProjects()
+        refreshProjects(autoSelect: false)
         if ModocConfig.needsSetup {
             showSetupSheet = true
         }
+    }
+
+    func goHome() {
+        appSection = .home
+    }
+
+    func enterBrowse() {
+        refreshProjects(autoSelect: false)
+        if browseSelectedDateFolder == nil {
+            browseSelectedDateFolder = batchFolders().first?.id
+        }
+        syncBrowseLanguageSelection()
+        appSection = .browse
+    }
+
+    func syncBrowseLanguageSelection() {
+        guard let dateID = browseSelectedDateFolder, dateID != ProjectBatchFolder.legacyID else {
+            browseSelectedLanguageFolder = nil
+            return
+        }
+        let langs = languageFolders(in: dateID)
+        if browseSelectedLanguageFolder == nil
+            || !langs.contains(where: { $0.id == browseSelectedLanguageFolder }) {
+            browseSelectedLanguageFolder = langs.first?.id
+        }
+        let inFolder = projects(
+            inBatchFolder: dateID,
+            languageFolder: browseSelectedLanguageFolder ?? ""
+        )
+        if !inFolder.contains(where: { $0.id == selectedProjectID }) {
+            selectedProjectID = inFolder.first?.id
+        }
+    }
+
+    func enterPipeline() {
+        refreshProjects(autoSelect: true)
+        appSection = .pipeline
+    }
+
+    func enterStats() {
+        refreshProjects(autoSelect: false)
+        appSection = .stats
+    }
+
+    func batchFolderName(for project: VideoProject) -> String? {
+        let projectsRoot = ModocConfig.projectsURL.standardizedFileURL.path
+        let folderPath = project.folderURL.standardizedFileURL.path
+        guard folderPath.hasPrefix(projectsRoot + "/") else { return nil }
+        let remainder = String(folderPath.dropFirst(projectsRoot.count + 1))
+        let parts = remainder.split(separator: "/").map(String.init)
+        guard parts.count >= 2, ProjectBatchFolderFormat.isDateBatchFolder(parts[0]) else { return nil }
+        return parts[0]
+    }
+
+    func languageFolders(in dateFolderID: String) -> [ProjectBatchLanguageFolder] {
+        guard dateFolderID != ProjectBatchFolder.legacyID else { return [] }
+        let dateURL = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
+        var counts: [String: Int] = [:]
+        for folderName in ProjectBatchFolderFormat.languageFolderOrder {
+            let langURL = dateURL.appendingPathComponent(folderName, isDirectory: true)
+            counts[folderName] = projectFolderPaths(in: langURL).count
+        }
+        // Legacy: projects sitting directly under the date folder (pre-english/korean layout)
+        for path in projectFolderPaths(in: dateURL) {
+            guard let project = loadProject(from: URL(fileURLWithPath: path, isDirectory: true)) else {
+                continue
+            }
+            let key = ProjectBatchFolderFormat.folderName(for: project.manifest.language)
+            counts[key, default: 0] += 1
+        }
+        return ProjectBatchFolderFormat.languageFolderOrder.compactMap { folderName in
+            let count = counts[folderName, default: 0]
+            guard count > 0 else { return nil }
+            guard let language = ProjectBatchFolderFormat.language(for: folderName) else { return nil }
+            return ProjectBatchLanguageFolder(
+                id: folderName,
+                displayTitle: ProjectBatchFolderFormat.displayTitle(forLanguageFolder: folderName),
+                projectCount: count,
+                language: language
+            )
+        }
+    }
+
+    func projects(inBatchFolder dateFolderID: String, languageFolder: String) -> [VideoProject] {
+        if dateFolderID == ProjectBatchFolder.legacyID {
+            return legacyProjects()
+        }
+        let dateURL = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
+        var results: [VideoProject] = []
+        let langURL = dateURL.appendingPathComponent(languageFolder, isDirectory: true)
+        for path in projectFolderPaths(in: langURL) {
+            if let project = loadProject(from: URL(fileURLWithPath: path, isDirectory: true)) {
+                results.append(project)
+            }
+        }
+        if let language = ProjectBatchFolderFormat.language(for: languageFolder) {
+            for path in projectFolderPaths(in: dateURL) {
+                guard let project = loadProject(from: URL(fileURLWithPath: path, isDirectory: true)),
+                      project.manifest.language == language else { continue }
+                results.append(project)
+            }
+        }
+        var seen = Set<String>()
+        return results.filter { seen.insert($0.id).inserted }
+            .sorted { $0.manifest.createdAt > $1.manifest.createdAt }
+    }
+
+    func projects(inBatchFolder folderID: String) -> [VideoProject] {
+        if folderID == ProjectBatchFolder.legacyID {
+            return legacyProjects()
+        }
+        return languageFolders(in: folderID).flatMap { projects(inBatchFolder: folderID, languageFolder: $0.id) }
+    }
+
+    func batchFolders() -> [ProjectBatchFolder] {
+        let root = ModocConfig.projectsURL
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        var folders: [ProjectBatchFolder] = []
+        var legacyCount = 0
+
+        for entry in entries where entry.hasDirectoryPath {
+            let name = entry.lastPathComponent
+            if ProjectBatchFolderFormat.isDateBatchFolder(name) {
+                let count = projects(inBatchFolder: name).count
+                let hasActivity = BatchStateReader.hasBatchActivity(
+                    in: root.appendingPathComponent(name, isDirectory: true)
+                )
+                if count > 0 || hasActivity {
+                    folders.append(ProjectBatchFolder(
+                        id: name,
+                        displayTitle: ProjectBatchFolderFormat.displayTitle(for: name),
+                        projectCount: max(count, hasActivity ? 1 : 0),
+                        sortKey: name
+                    ))
+                }
+                continue
+            }
+            if isProjectFolder(entry) {
+                legacyCount += 1
+            }
+        }
+
+        if legacyCount > 0 {
+            folders.append(ProjectBatchFolder(
+                id: ProjectBatchFolder.legacyID,
+                displayTitle: "Other projects",
+                projectCount: legacyCount,
+                sortKey: "0"
+            ))
+        }
+
+        return folders.sorted { $0.sortKey > $1.sortKey }
+    }
+
+    func ensureTodayInBatchFolders(_ folders: [ProjectBatchFolder]) -> [ProjectBatchFolder] {
+        let today = BatchRunner.todayFolderID()
+        if folders.contains(where: { $0.id == today }) { return folders }
+        var result = folders
+        result.insert(
+            ProjectBatchFolder(
+                id: today,
+                displayTitle: ProjectBatchFolderFormat.displayTitle(for: today),
+                projectCount: projects(inBatchFolder: today).count,
+                sortKey: today
+            ),
+            at: 0
+        )
+        return result
+    }
+
+    private func legacyProjects() -> [VideoProject] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: ModocConfig.projectsURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        return entries
+            .filter { $0.hasDirectoryPath && isProjectFolder($0) }
+            .compactMap { loadProject(from: $0) }
+            .sorted { $0.manifest.createdAt > $1.manifest.createdAt }
+    }
+
+    func globalStatsRows() -> [GlobalProjectStatsRow] {
+        projects.compactMap { project in
+            let summary = PipelineTimeTracker.summaries(for: project)
+                .first { $0.language == project.manifest.language }
+            guard let summary, summary.totalPipelineSeconds > 0 || summary.stats.startedAt != nil else {
+                return nil
+            }
+            return GlobalProjectStatsRow(
+                id: project.id,
+                project: project,
+                summary: summary,
+                batchFolder: batchFolderName(for: project)
+            )
+        }
+        .sorted { $0.summary.totalPipelineSeconds > $1.summary.totalPipelineSeconds }
+    }
+
+    private func projectFolderPaths(in directory: URL) -> [String] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        return entries
+            .filter { $0.hasDirectoryPath && isProjectFolder($0) }
+            .map { $0.standardizedFileURL.path }
+    }
+
+    private func isProjectFolder(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.appendingPathComponent("project.json").path)
     }
 
     func chooseModocRoot() {
@@ -40,7 +262,7 @@ final class ProjectStore: ObservableObject {
         NSAppleScript(source: script)?.executeAndReturnError(&error)
     }
 
-    func refreshProjects() {
+    func refreshProjects(autoSelect: Bool = true) {
         do {
             try ModocConfig.ensureProjectsDirectory()
         } catch {
@@ -49,16 +271,7 @@ final class ProjectStore: ObservableObject {
         }
 
         var folderPaths = Set<String>()
-
-        if let entries = try? FileManager.default.contentsOfDirectory(
-            at: ModocConfig.projectsURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) {
-            for folder in entries where folder.hasDirectoryPath {
-                folderPaths.insert(folder.standardizedFileURL.path)
-            }
-        }
+        collectProjectFolderPaths(at: ModocConfig.projectsURL, into: &folderPaths)
 
         for path in ModocConfig.openedProjectPaths {
             folderPaths.insert(path)
@@ -74,6 +287,8 @@ final class ProjectStore: ObservableObject {
 
         loaded.sort { $0.manifest.createdAt > $1.manifest.createdAt }
         projects = loaded
+
+        guard autoSelect else { return }
 
         if selectedProjectID == nil, let first = loaded.first {
             selectedProjectID = first.id
@@ -119,8 +334,9 @@ final class ProjectStore: ObservableObject {
         }
 
         ModocConfig.registerOpenedProject(folder)
-        refreshProjects()
+        refreshProjects(autoSelect: true)
         selectedProjectID = folder.path
+        appSection = .pipeline
         if let proj = loadProject(from: folder) {
             PipelineTimeTracker.recordProjectOpened(proj)
         }
@@ -237,6 +453,7 @@ final class ProjectStore: ObservableObject {
 
         refreshProjects()
         selectedProjectID = folder.path
+        appSection = .pipeline
 
         let project = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
         try await runAutoPipeline(project, options: autoPipeline)
@@ -595,6 +812,93 @@ final class ProjectStore: ObservableObject {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.folderURL.path)
     }
 
+    func revealBatchLog(in dateFolderID: String) {
+        let folder = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
+        let preferred = folder.appendingPathComponent("daily-batch-run.log")
+        if FileManager.default.fileExists(atPath: preferred.path) {
+            NSWorkspace.shared.selectFile(preferred.path, inFileViewerRootedAtPath: folder.path)
+            return
+        }
+        if let latest = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])
+            .filter({ $0.lastPathComponent.hasPrefix("batch-") && $0.pathExtension == "log" })
+            .sorted(by: { a, b in
+                let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return da > db
+            })
+            .first {
+            NSWorkspace.shared.selectFile(latest.path, inFileViewerRootedAtPath: folder.path)
+            return
+        }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+    }
+
+    func batchState(for dateFolderID: String) -> BatchStateFile? {
+        let folder = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
+        return BatchStateReader.load(from: folder)
+    }
+
+    func batchInferredProgress(for dateFolderID: String) -> InferredBatchProgress? {
+        let folder = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
+        return BatchStateReader.inferProgress(in: folder, projects: projects(inBatchFolder: dateFolderID))
+    }
+
+    func batchIsRunning(for dateFolderID: String) -> Bool {
+        BatchStateReader.isProcessRunning(for: dateFolderID)
+    }
+
+    func startDailyBatch(dateFolderID: String? = nil) {
+        let date = dateFolderID ?? BatchRunner.todayFolderID()
+        do {
+            try BatchRunner.startDailyBatch(dateFolderID: date)
+            browseSelectedDateFolder = date
+            appSection = .browse
+            syncBrowseLanguageSelection()
+        } catch {
+            ProjectFolderPicker.showError(error.localizedDescription)
+        }
+    }
+
+    func resumeDailyBatch(dateFolderID: String) {
+        do {
+            try BatchRunner.resumeDailyBatch(dateFolderID: dateFolderID)
+        } catch {
+            ProjectFolderPicker.showError(error.localizedDescription)
+        }
+    }
+
+    func batchNeedsResume(for dateFolderID: String) -> Bool {
+        guard dateFolderID != ProjectBatchFolder.legacyID else { return false }
+        let folder = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
+        guard BatchStateReader.hasBatchActivity(in: folder) else { return false }
+
+        if batchIsRunning(for: dateFolderID) { return false }
+
+        if let state = batchState(for: dateFolderID) {
+            let status = state.effectiveStatus
+            if status == .interrupted || status == .failed { return true }
+            if status == .running { return true }
+            if status == .completed { return false }
+        }
+
+        return batchInferredProgress(for: dateFolderID)?.needsResume ?? false
+    }
+
+    func resumeBatchInTerminal(dateFolder: String, stopExisting: Bool = false) {
+        let root = ModocConfig.rootURL.path.replacingOccurrences(of: "'", with: "'\\''")
+        let date = dateFolder.replacingOccurrences(of: "'", with: "'\\''")
+        let batchPath = "output/projects/\(date)".replacingOccurrences(of: "'", with: "'\\''")
+        var source = "cd '\(root)'"
+        if stopExisting {
+            source += " && pkill -f 'batch_pipeline.py.*\(batchPath)' 2>/dev/null || true"
+            source += " && sleep 1"
+        }
+        source += " && ./resume-batch.sh '\(date)'"
+        let script = "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"\(source)\""
+        var error: NSDictionary?
+        NSAppleScript(source: script)?.executeAndReturnError(&error)
+    }
+
     func deleteProject(_ project: VideoProject) throws {
         if pipeline.isRunning {
             throw ProjectDeleteError.pipelineRunning
@@ -626,6 +930,24 @@ final class ProjectStore: ObservableObject {
         let f = DateFormatter()
         f.dateFormat = "yyyyMMdd-HHmm"
         return f.string(from: Date())
+    }
+
+    /// Finds project folders up to three levels deep (date / english|korean / project).
+    private func collectProjectFolderPaths(at root: URL, into paths: inout Set<String>, depth: Int = 0) {
+        guard depth <= 3 else { return }
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for entry in entries where entry.hasDirectoryPath {
+            if isProjectFolder(entry) {
+                paths.insert(entry.standardizedFileURL.path)
+            } else {
+                collectProjectFolderPaths(at: entry, into: &paths, depth: depth + 1)
+            }
+        }
     }
 }
 

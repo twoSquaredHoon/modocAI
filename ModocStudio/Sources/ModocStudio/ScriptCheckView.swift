@@ -79,6 +79,7 @@ struct ScriptCheckView: View {
                     errorState(actionError)
                 } else if let report {
                     reportContent(report)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     emptyState
                 }
@@ -241,14 +242,9 @@ struct ScriptCheckView: View {
                 issueDetailPanel(report)
                     .frame(minWidth: 280)
             }
-            .frame(maxHeight: .infinity)
-
-            if hasGlobalSections(report) {
-                Divider()
-                globalSections(report)
-                    .frame(maxHeight: 180)
-            }
+            .layoutPriority(1)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func summaryBanner(_ report: ScriptVerificationReport) -> some View {
@@ -419,16 +415,24 @@ struct ScriptCheckView: View {
                 .padding(.bottom, 6)
 
             ScrollView {
-                if let selected = selectedAnnotation {
-                    selectedLineDetail(selected)
-                } else if report.verdict == .fail || report.verdict == .review {
-                    overviewDetail(report)
-                } else {
-                    Text("Select a script line to see how it compares to the article.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding()
+                VStack(alignment: .leading, spacing: 16) {
+                    if let selected = selectedAnnotation {
+                        selectedLineDetail(selected)
+                    } else if report.verdict == .fail || report.verdict == .review {
+                        overviewDetail(report)
+                    } else {
+                        Text("Select a script line to see how it compares to the article.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if hasGlobalSections(report) {
+                        Divider()
+                        globalSectionsContent(report)
+                    }
                 }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -505,8 +509,48 @@ struct ScriptCheckView: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding()
+    }
+
+    @ViewBuilder
+    private func globalSectionsContent(_ report: ScriptVerificationReport) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !report.importantOmissions.isEmpty {
+                globalBox(title: "Missing from script") {
+                    ForEach(report.importantOmissions) { issue in
+                        issueCard(title: issue.title, severity: issue.issueSeverity, note: issue.note ?? "")
+                    }
+                }
+            }
+
+            if let age = report.ageConsistency, age.ok != true {
+                globalBox(title: "Age mismatch") {
+                    if let a = age.articleAge { Text("Article: \(a)").font(.caption) }
+                    if let s = age.scriptAge { Text("Script: \(s)").font(.caption) }
+                    if let n = age.note {
+                        Text(n).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if !report.supportedClaims.isEmpty {
+                globalBox(title: "Supported claims") {
+                    ForEach(Array(report.supportedClaims.enumerated()), id: \.offset) { _, claim in
+                        Text("• \(claim)").font(.caption)
+                    }
+                }
+            }
+        }
+    }
+
+    private func globalBox<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            content()
+        }
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
     }
 
     @ViewBuilder
@@ -570,8 +614,6 @@ struct ScriptCheckView: View {
                 }
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func issueCard(title: String, severity: IssueSeverity, note: String, muted: Bool = false) -> some View {
@@ -604,50 +646,6 @@ struct ScriptCheckView: View {
         !report.importantOmissions.isEmpty
             || report.ageConsistency?.ok == false
             || !report.supportedClaims.isEmpty
-    }
-
-    private func globalSections(_ report: ScriptVerificationReport) -> some View {
-        ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: 16) {
-                if !report.importantOmissions.isEmpty {
-                    globalBox(title: "Missing from script") {
-                        ForEach(report.importantOmissions) { issue in
-                            issueCard(title: issue.title, severity: issue.issueSeverity, note: issue.note ?? "")
-                        }
-                    }
-                }
-
-                if let age = report.ageConsistency, age.ok != true {
-                    globalBox(title: "Age mismatch") {
-                        if let a = age.articleAge { Text("Article: \(a)").font(.caption) }
-                        if let s = age.scriptAge { Text("Script: \(s)").font(.caption) }
-                        if let n = age.note {
-                            Text(n).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                if !report.supportedClaims.isEmpty {
-                    globalBox(title: "Supported claims") {
-                        ForEach(Array(report.supportedClaims.prefix(6).enumerated()), id: \.offset) { _, claim in
-                            Text("• \(claim)").font(.caption)
-                        }
-                    }
-                }
-            }
-            .padding()
-        }
-    }
-
-    private func globalBox<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-            content()
-        }
-        .padding(12)
-        .frame(width: 280, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
     }
 
     @MainActor

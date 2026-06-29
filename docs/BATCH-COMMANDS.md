@@ -41,18 +41,22 @@ Requires `./setup.sh` once and `GEMINI_API_KEY` in `.env`.
 ## Daily / overnight (production)
 
 ```bash
-# Posts published in last 24h (EN + KO), skip processed → full pipeline
+# 5 newest EN + 5 newest KO → output/projects/YYYY-MM-DD/ (skip already processed)
+./start-daily-batch.sh    # recommended — survives Terminal closing
+
+# Or run in foreground (blocks until done)
 ./daily-batch.sh
 
-# Fetch only (last 24h)
-./fetch-daily-urls.sh
+# Same but skip paid Veo videos
+./daily-batch.sh --skip-videos
 
-# Wider window if you missed a day
-./fetch-daily-urls.sh --since-hours 36
+# Resume after interrupt or partial failure
+./resume-batch.sh              # today
+./resume-batch.sh 2026-06-28   # specific date folder
 
-# Daily fetch + batch without Veo
-./fetch-daily-urls.sh
-./batch-run.sh urls.txt --skip-videos
+# Wider time window instead of "5 newest" (legacy fetch)
+./fetch-daily-urls.sh --since-hours 24
+./batch-run.sh urls.txt
 ```
 
 ---

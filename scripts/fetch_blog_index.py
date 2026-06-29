@@ -10,9 +10,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-from trafilatura import fetch_url
+from http_fetch import fetch_url_timed
 
 from article_registry import migrate_from_projects, normalize_url, processed_urls
+from batch_state import touch_fetching
 from gemini_util import PROJECT_ROOT
 
 BLOG_INDEXES = {
@@ -23,6 +24,8 @@ BLOG_INDEXES = {
 SKIP_SLUG_FRAGMENTS = (
     "the-science-behind-fevercoach",
     "trusted-sources-for-reliable-fever-management",
+    "important-notice",
+    "공지사항",
 )
 
 DEFAULT_OUT = PROJECT_ROOT / "urls.txt"
@@ -78,8 +81,8 @@ def parse_published_at(raw: str) -> datetime | None:
 
 
 def fetch_published_at(post_url: str) -> datetime | None:
-    print(f"  date lookup: {post_url}")
-    html = fetch_url(post_url)
+    print(f"  date lookup: {post_url}", flush=True)
+    html = fetch_url_timed(post_url)
     if not html:
         return None
     match = _DATE_PUBLISHED_RE.search(html)
@@ -102,8 +105,8 @@ def fetch_recent_posts(
 
     for page in range(1, max_pages + 1):
         page_url = index_url if page == 1 else f"{index_url.rstrip('/')}/page/{page}"
-        print(f"Fetching index: {page_url}")
-        html = fetch_url(page_url)
+        print(f"Fetching index: {page_url}", flush=True)
+        html = fetch_url_timed(page_url)
         if not html:
             raise RuntimeError(f"Could not download index page: {page_url}")
 
@@ -147,8 +150,8 @@ def fetch_latest_posts(
 
     for page in range(1, max_pages + 1):
         page_url = index_url if page == 1 else f"{index_url.rstrip('/')}/page/{page}"
-        print(f"Fetching index: {page_url}")
-        html = fetch_url(page_url)
+        print(f"Fetching index: {page_url}", flush=True)
+        html = fetch_url_timed(page_url)
         if not html:
             raise RuntimeError(f"Could not download index page: {page_url}")
 
@@ -165,7 +168,12 @@ def fetch_latest_posts(
                 print(f"    ? could not read date — skipping: {url}")
                 continue
             collected.append((url, published))
-            print(f"    · {published.isoformat(timespec='seconds')}  {url}")
+            print(f"    · {published.isoformat(timespec='seconds')}  {url}", flush=True)
+            if len(collected) >= limit * 3:
+                break
+
+        if len(collected) >= limit * 3:
+            break
 
         if len(collected) >= limit:
             break
@@ -231,6 +239,12 @@ def main() -> None:
         action="store_true",
         help="Do not skip URLs already in processed_articles.json",
     )
+    parser.add_argument(
+        "--batch-dir",
+        type=Path,
+        default=None,
+        help="Update batch_state.json while fetching (for Modoc Studio)",
+    )
     args = parser.parse_args()
 
     imported = migrate_from_projects()
@@ -256,7 +270,9 @@ def main() -> None:
     entries: list[tuple[str, str, datetime | None]] = []
 
     for language, index_url in indexes:
-        print(f"\n{language.upper()} index")
+        print(f"\n{language.upper()} index", flush=True)
+        if args.batch_dir:
+            touch_fetching(args.batch_dir.expanduser().resolve(), step=f"Fetching {language.upper()} blog index")
         if args.latest > 0:
             posts = fetch_latest_posts(
                 index_url, language=language, limit=args.latest

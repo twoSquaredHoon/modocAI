@@ -81,11 +81,9 @@ def migrate_from_projects() -> int:
     added = 0
     if not PROJECTS_DIR.is_dir():
         return 0
-    for folder in PROJECTS_DIR.iterdir():
+    for manifest_path in PROJECTS_DIR.rglob("project.json"):
+        folder = manifest_path.parent
         if not folder.is_dir():
-            continue
-        manifest_path = folder / "project.json"
-        if not manifest_path.is_file():
             continue
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

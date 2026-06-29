@@ -9,14 +9,26 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
+from article_registry import is_processed, migrate_from_projects, normalize_url, register_article
+from batch_state import (
+    begin as begin_batch_state,
+    clear_current,
+    effective_status,
+    finish as finish_batch_state,
+    load as load_batch_state,
+    record_result,
+    save as save_batch_state,
+    set_current,
+)
 from blog_to_script import slug_from_url
-from article_registry import is_processed, migrate_from_projects, register_article
 from gemini_util import PROJECT_ROOT
 
 PROJECTS_DIR = PROJECT_ROOT / "output" / "projects"
 BATCH_LOG_DIR = PROJECT_ROOT / "output" / "batch"
 PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python"
+LANGUAGE_SUBDIRS = {"en": "english", "ko": "korean", "es": "spanish"}
 
 
 def log(msg: str, *, file: Path | None = None) -> None:
@@ -73,6 +85,16 @@ def save_manifest(folder: Path, manifest: dict) -> None:
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def load_manifest(folder: Path) -> dict | None:
+    path = folder / "project.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
 def parse_urls_file(path: Path, default_language: str) -> list[tuple[str, str]]:
     jobs: list[tuple[str, str]] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -92,11 +114,32 @@ def parse_urls_file(path: Path, default_language: str) -> list[tuple[str, str]]:
     return jobs
 
 
-def create_project_folder(url: str, language: str) -> tuple[Path, dict]:
+def language_subdir(language: str) -> str:
+    return LANGUAGE_SUBDIRS.get(language, language)
+
+
+def batch_project_roots(projects_dir: Path) -> list[Path]:
+    """Language subfolders plus the batch root (legacy flat layout)."""
+    roots = [projects_dir]
+    for name in (*LANGUAGE_SUBDIRS.values(), *LANGUAGE_SUBDIRS.keys()):
+        path = projects_dir / name
+        if path.is_dir() and path not in roots:
+            roots.append(path)
+    return roots
+
+
+def create_project_folder(
+    url: str,
+    language: str,
+    *,
+    projects_dir: Path,
+) -> tuple[Path, dict]:
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
     slug = slug_from_url(url)
     folder_name = f"{slug}-{stamp}"
-    folder = PROJECTS_DIR / folder_name
+    parent = projects_dir / language_subdir(language)
+    parent.mkdir(parents=True, exist_ok=True)
+    folder = parent / folder_name
     folder.mkdir(parents=True, exist_ok=False)
     manifest = {
         "id": folder_name,
@@ -111,6 +154,37 @@ def create_project_folder(url: str, language: str) -> tuple[Path, dict]:
     return folder, manifest
 
 
+def find_project_folder(projects_dir: Path, url: str) -> Path | None:
+    key = normalize_url(url)
+    matches: list[tuple[str, Path]] = []
+    for root in batch_project_roots(projects_dir):
+        if not root.is_dir():
+            continue
+        for child in root.iterdir():
+            if not child.is_dir():
+                continue
+            manifest = load_manifest(child)
+            if not manifest:
+                continue
+            blog = manifest.get("blog_url") or manifest.get("blogURL")
+            if isinstance(blog, str) and normalize_url(blog) == key:
+                matches.append((manifest.get("created_at", ""), child))
+    if not matches:
+        return None
+    matches.sort(key=lambda item: item[0], reverse=True)
+    return matches[0][1]
+
+
+def project_is_complete(folder: Path, *, skip_videos: bool) -> bool:
+    manifest = load_manifest(folder)
+    if not manifest:
+        return False
+    phase = manifest.get("phase")
+    if skip_videos:
+        return phase in ("promptsReview", "voiceoverReview", "ready")
+    return phase == "ready"
+
+
 def run_project_pipeline(
     folder: Path,
     manifest: dict,
@@ -118,35 +192,42 @@ def run_project_pipeline(
     skip_article_check: bool,
     skip_videos: bool,
     log_file: Path,
+    resume: bool = False,
+    on_step: Callable[[str], None] | None = None,
 ) -> dict:
     url = manifest["blog_url"]
     language = manifest["language"]
     script_path = folder / "script.txt"
 
     def step(label: str, args: list[str]) -> None:
+        if on_step:
+            on_step(label)
         log(f"  → {label}", file=log_file)
         run_cmd([str(PYTHON), *args], log_file=log_file, step_label=label)
 
-    manifest["phase"] = "creatingScript"
     manifest["last_error"] = None
     save_manifest(folder, manifest)
 
-    step(
-        "Script",
-        [
-            "scripts/blog_to_script.py",
-            url,
-            "--output",
-            str(script_path),
-            "--language",
-            language,
-        ],
-    )
-    manifest["title"] = title_from_script(script_path)
+    if not resume or not script_path.is_file():
+        manifest["phase"] = "creatingScript"
+        save_manifest(folder, manifest)
+        step(
+            "Script",
+            [
+                "scripts/blog_to_script.py",
+                url,
+                "--output",
+                str(script_path),
+                "--language",
+                language,
+            ],
+        )
+    manifest["title"] = title_from_script(script_path) if script_path.is_file() else manifest.get("title")
     manifest["phase"] = "scriptReview"
     save_manifest(folder, manifest)
 
-    if not skip_article_check:
+    verification_path = folder / "script_verification.json"
+    if not skip_article_check and (not resume or not verification_path.is_file()):
         step(
             "Article check",
             [
@@ -161,50 +242,54 @@ def run_project_pipeline(
             ],
         )
 
-    manifest["phase"] = "generatingPrompts"
-    save_manifest(folder, manifest)
-    step(
-        "Clip prompts",
-        [
-            "scripts/script_to_clips.py",
-            str(script_path),
-            "--output-dir",
-            str(folder),
-            "--prompts-only",
-            "--language",
-            language,
-        ],
-    )
-    step(
-        "Derived clips",
-        [
-            "scripts/derived_clips.py",
-            str(folder),
-            str(script_path),
-            "--language",
-            language,
-        ],
-    )
-    manifest["phase"] = "promptsReview"
-    save_manifest(folder, manifest)
+    clips_path = folder / "clips.json"
+    if not resume or not clips_path.is_file():
+        manifest["phase"] = "generatingPrompts"
+        save_manifest(folder, manifest)
+        step(
+            "Clip prompts",
+            [
+                "scripts/script_to_clips.py",
+                str(script_path),
+                "--output-dir",
+                str(folder),
+                "--prompts-only",
+                "--language",
+                language,
+            ],
+        )
+        step(
+            "Derived clips",
+            [
+                "scripts/derived_clips.py",
+                str(folder),
+                str(script_path),
+                "--language",
+                language,
+            ],
+        )
+        manifest["phase"] = "promptsReview"
+        save_manifest(folder, manifest)
 
-    manifest["phase"] = "generatingVoiceover"
-    save_manifest(folder, manifest)
-    step(
-        "Voiceover",
-        [
-            "scripts/script_to_voiceover.py",
-            str(script_path),
-            "--output",
-            str(folder / "voiceover.wav"),
-            "--clips-dir",
-            str(folder),
-            "--language",
-            language,
-        ],
-    )
-    manifest["phase"] = "voiceoverReview"
-    save_manifest(folder, manifest)
+    voiceover_path = folder / "voiceover.wav"
+    if not resume or not voiceover_path.is_file():
+        manifest["phase"] = "generatingVoiceover"
+        save_manifest(folder, manifest)
+        step(
+            "Voiceover",
+            [
+                "scripts/script_to_voiceover.py",
+                str(script_path),
+                "--output",
+                str(voiceover_path),
+                "--clips-dir",
+                str(folder),
+                "--language",
+                language,
+            ],
+        )
+        manifest["phase"] = "voiceoverReview"
+        save_manifest(folder, manifest)
 
     if not skip_videos:
         manifest["phase"] = "generatingVideos"
@@ -214,7 +299,7 @@ def run_project_pipeline(
             ["scripts/script_to_clips.py", "--resume", str(folder)],
         )
         manifest["phase"] = "ready"
-    else:
+    elif manifest.get("phase") != "ready":
         manifest["phase"] = "promptsReview"
     manifest["last_error"] = None
     save_manifest(folder, manifest)
@@ -252,6 +337,17 @@ def main() -> None:
         action="store_true",
         help="Skip script vs article verification",
     )
+    parser.add_argument(
+        "--projects-dir",
+        type=Path,
+        default=PROJECTS_DIR,
+        help="Parent folder for new project directories (default: output/projects)",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Continue a batch: reuse existing project folders and skip finished steps",
+    )
     args = parser.parse_args()
 
     if not PYTHON.is_file():
@@ -275,12 +371,48 @@ def main() -> None:
     if imported:
         print(f"Imported {imported} existing project(s) into processed_articles.json")
 
-    BATCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
+    projects_dir = args.projects_dir.expanduser().resolve()
+    projects_dir.mkdir(parents=True, exist_ok=True)
+
+    existing = load_batch_state(projects_dir)
+    if args.resume:
+        status = effective_status(existing)
+        if status == "running":
+            print(
+                "Batch already marked running (PID may still be active). "
+                "Stop it first or wait for it to finish.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Resume mode — continuing batch in {projects_dir}")
+    elif existing and effective_status(existing) == "running":
+        print(
+            f"Batch appears to be running in {projects_dir}. "
+            "Use --resume after it stops, or ./resume-batch.sh",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     batch_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    master_log = BATCH_LOG_DIR / f"batch-{batch_stamp}.log"
+    if projects_dir != PROJECTS_DIR.resolve():
+        log_dir = projects_dir
+    else:
+        BATCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_dir = BATCH_LOG_DIR
+    master_log = log_dir / f"batch-{batch_stamp}.log"
+
+    batch_state = begin_batch_state(
+        projects_dir,
+        urls_file=urls_path,
+        total=len(jobs),
+        skip_videos=args.skip_videos,
+        skip_article_check=args.skip_article_check,
+        resume=args.resume,
+    )
 
     log(f"Batch started: {len(jobs)} project(s)", file=master_log)
+    log(f"Projects dir: {projects_dir}", file=master_log)
+    log(f"Resume: {args.resume}", file=master_log)
     log(f"Skip videos: {args.skip_videos}", file=master_log)
     log(f"Skip article check: {args.skip_article_check}", file=master_log)
 
@@ -288,9 +420,28 @@ def main() -> None:
     for index, (url, language) in enumerate(jobs, start=1):
         log(f"\n{'=' * 60}", file=master_log)
         log(f"[{index}/{len(jobs)}] {url} ({language})", file=master_log)
-        project_log = BATCH_LOG_DIR / f"batch-{batch_stamp}-{index:02d}.log"
-        if is_processed(url):
+        project_log = log_dir / f"batch-{batch_stamp}-{index:02d}.log"
+
+        existing_folder = find_project_folder(projects_dir, url)
+        if existing_folder and project_is_complete(
+            existing_folder, skip_videos=args.skip_videos
+        ):
+            log(f"  ⊘ Skip — already complete in batch folder", file=master_log)
+            record_result(batch_state, projects_dir, "skipped")
+            results.append(
+                {
+                    "status": "skipped",
+                    "url": url,
+                    "language": language,
+                    "reason": "already complete in batch",
+                    "folder": str(existing_folder),
+                }
+            )
+            continue
+
+        if not args.resume and is_processed(url):
             log(f"  ⊘ Skip — already in processed_articles.json", file=master_log)
+            record_result(batch_state, projects_dir, "skipped")
             results.append(
                 {
                     "status": "skipped",
@@ -300,15 +451,62 @@ def main() -> None:
                 }
             )
             continue
+
+        folder: Path | None = None
         try:
-            folder, manifest = create_project_folder(url, language)
+            if existing_folder and args.resume:
+                folder = existing_folder
+                manifest = load_manifest(folder)
+                if not manifest:
+                    raise RuntimeError(f"Missing project.json in {folder}")
+                log(f"  ↻ Resuming → {folder}", file=master_log)
+                resume_run = True
+            elif existing_folder and not project_is_complete(
+                existing_folder, skip_videos=args.skip_videos
+            ):
+                folder = existing_folder
+                manifest = load_manifest(folder)
+                if not manifest:
+                    raise RuntimeError(f"Missing project.json in {folder}")
+                log(f"  ↻ Continuing partial project → {folder}", file=master_log)
+                resume_run = True
+            else:
+                folder, manifest = create_project_folder(
+                    url, language, projects_dir=projects_dir
+                )
+                resume_run = False
+
+            def on_step(label: str) -> None:
+                set_current(
+                    batch_state,
+                    projects_dir,
+                    index=index,
+                    url=url,
+                    language=language,
+                    folder=str(folder),
+                    step=label,
+                )
+
+            set_current(
+                batch_state,
+                projects_dir,
+                index=index,
+                url=url,
+                language=language,
+                folder=str(folder),
+                step="starting",
+            )
             manifest = run_project_pipeline(
                 folder,
                 manifest,
                 skip_article_check=args.skip_article_check,
                 skip_videos=args.skip_videos,
                 log_file=project_log,
+                resume=resume_run,
+                on_step=on_step,
             )
+            clear_current(batch_state, projects_dir)
+            record_result(batch_state, projects_dir, "ok")
             results.append(
                 {
                     "status": "ok",
@@ -327,6 +525,10 @@ def main() -> None:
             log(f"  ✓ Done → {folder}", file=master_log)
         except Exception as exc:
             err = str(exc)
+            batch_state["last_error"] = err
+            save_batch_state(projects_dir, batch_state)
+            clear_current(batch_state, projects_dir)
+            record_result(batch_state, projects_dir, "failed")
             results.append(
                 {
                     "status": "failed",
@@ -338,12 +540,12 @@ def main() -> None:
             register_article(
                 url,
                 language=language,
-                project_folder=str(folder) if "folder" in locals() else None,
+                project_folder=str(folder) if folder else None,
                 status="failed",
                 error=err,
             )
             log(f"  ✗ Failed: {err}", file=master_log)
-            if "folder" in locals():
+            if folder:
                 try:
                     mf_path = folder / "project.json"
                     if mf_path.is_file():
@@ -354,7 +556,7 @@ def main() -> None:
                 except OSError:
                     pass
 
-    summary_path = BATCH_LOG_DIR / f"batch-{batch_stamp}-summary.json"
+    summary_path = log_dir / f"batch-{batch_stamp}-summary.json"
     summary_path.write_text(
         json.dumps(results, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -362,12 +564,19 @@ def main() -> None:
 
     ok = sum(1 for r in results if r["status"] == "ok")
     skipped = sum(1 for r in results if r["status"] == "skipped")
-    log(f"\nBatch finished: {ok}/{len(jobs)} succeeded ({skipped} skipped)", file=master_log)
+    failed = sum(1 for r in results if r["status"] == "failed")
+    finish_batch_state(
+        batch_state,
+        projects_dir,
+        success=failed == 0,
+    )
+
+    log(f"\nBatch finished: {ok}/{len(jobs)} succeeded ({skipped} skipped, {failed} failed)", file=master_log)
     log(f"Summary → {summary_path}", file=master_log)
     log(f"Master log → {master_log}", file=master_log)
-    log("\nOpen Modoc Studio — projects appear under output/projects/", file=master_log)
+    log(f"\nOpen Modoc Studio — projects appear under {projects_dir}", file=master_log)
 
-    if ok < len(jobs) - skipped:
+    if failed > 0:
         sys.exit(1)
 
 
