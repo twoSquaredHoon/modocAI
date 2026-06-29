@@ -175,11 +175,18 @@ def find_project_folder(projects_dir: Path, url: str) -> Path | None:
     return matches[0][1]
 
 
-def project_is_complete(folder: Path, *, skip_videos: bool) -> bool:
+def project_is_complete(
+    folder: Path,
+    *,
+    skip_videos: bool,
+    skip_voiceover: bool = False,
+) -> bool:
     manifest = load_manifest(folder)
     if not manifest:
         return False
     phase = manifest.get("phase")
+    if skip_voiceover and skip_videos:
+        return phase in ("promptsReview", "ready")
     if skip_videos:
         return phase in ("promptsReview", "voiceoverReview", "ready")
     return phase == "ready"
@@ -191,6 +198,7 @@ def run_project_pipeline(
     *,
     skip_article_check: bool,
     skip_videos: bool,
+    skip_voiceover: bool = False,
     log_file: Path,
     resume: bool = False,
     on_step: Callable[[str], None] | None = None,
@@ -271,25 +279,26 @@ def run_project_pipeline(
         manifest["phase"] = "promptsReview"
         save_manifest(folder, manifest)
 
-    voiceover_path = folder / "voiceover.wav"
-    if not resume or not voiceover_path.is_file():
-        manifest["phase"] = "generatingVoiceover"
-        save_manifest(folder, manifest)
-        step(
-            "Voiceover",
-            [
-                "scripts/script_to_voiceover.py",
-                str(script_path),
-                "--output",
-                str(voiceover_path),
-                "--clips-dir",
-                str(folder),
-                "--language",
-                language,
-            ],
-        )
-        manifest["phase"] = "voiceoverReview"
-        save_manifest(folder, manifest)
+    if not skip_voiceover:
+        voiceover_path = folder / "voiceover.wav"
+        if not resume or not voiceover_path.is_file():
+            manifest["phase"] = "generatingVoiceover"
+            save_manifest(folder, manifest)
+            step(
+                "Voiceover",
+                [
+                    "scripts/script_to_voiceover.py",
+                    str(script_path),
+                    "--output",
+                    str(voiceover_path),
+                    "--clips-dir",
+                    str(folder),
+                    "--language",
+                    language,
+                ],
+            )
+            manifest["phase"] = "voiceoverReview"
+            save_manifest(folder, manifest)
 
     if not skip_videos:
         manifest["phase"] = "generatingVideos"
@@ -330,7 +339,12 @@ def main() -> None:
     parser.add_argument(
         "--skip-videos",
         action="store_true",
-        help="Stop after voiceover (no paid Veo generation)",
+        help="Stop after clip prompts (no paid Veo generation)",
+    )
+    parser.add_argument(
+        "--skip-voiceover",
+        action="store_true",
+        help="Stop after clip prompts (no voiceover or videos)",
     )
     parser.add_argument(
         "--skip-article-check",
@@ -407,6 +421,7 @@ def main() -> None:
         total=len(jobs),
         skip_videos=args.skip_videos,
         skip_article_check=args.skip_article_check,
+        skip_voiceover=args.skip_voiceover,
         resume=args.resume,
     )
 
@@ -414,6 +429,7 @@ def main() -> None:
     log(f"Projects dir: {projects_dir}", file=master_log)
     log(f"Resume: {args.resume}", file=master_log)
     log(f"Skip videos: {args.skip_videos}", file=master_log)
+    log(f"Skip voiceover: {args.skip_voiceover}", file=master_log)
     log(f"Skip article check: {args.skip_article_check}", file=master_log)
 
     results: list[dict] = []
@@ -424,7 +440,9 @@ def main() -> None:
 
         existing_folder = find_project_folder(projects_dir, url)
         if existing_folder and project_is_complete(
-            existing_folder, skip_videos=args.skip_videos
+            existing_folder,
+            skip_videos=args.skip_videos,
+            skip_voiceover=args.skip_voiceover,
         ):
             log(f"  ⊘ Skip — already complete in batch folder", file=master_log)
             record_result(batch_state, projects_dir, "skipped")
@@ -462,7 +480,9 @@ def main() -> None:
                 log(f"  ↻ Resuming → {folder}", file=master_log)
                 resume_run = True
             elif existing_folder and not project_is_complete(
-                existing_folder, skip_videos=args.skip_videos
+                existing_folder,
+                skip_videos=args.skip_videos,
+                skip_voiceover=args.skip_voiceover,
             ):
                 folder = existing_folder
                 manifest = load_manifest(folder)
@@ -501,6 +521,7 @@ def main() -> None:
                 manifest,
                 skip_article_check=args.skip_article_check,
                 skip_videos=args.skip_videos,
+                skip_voiceover=args.skip_voiceover,
                 log_file=project_log,
                 resume=resume_run,
                 on_step=on_step,

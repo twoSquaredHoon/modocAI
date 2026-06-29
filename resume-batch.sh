@@ -21,4 +21,5 @@ fi
 
 export PYTHONUNBUFFERED=1
 echo "Resuming batch in $BATCH_DIR"
-exec ./batch-run.sh "$BATCH_DIR/urls.txt" --projects-dir "$BATCH_DIR" --resume "$@"
+exec ./batch-run.sh "$BATCH_DIR/urls.txt" --projects-dir "$BATCH_DIR" --resume \
+  --skip-voiceover --skip-videos "$@"

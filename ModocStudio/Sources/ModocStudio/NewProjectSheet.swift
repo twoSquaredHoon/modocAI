@@ -7,22 +7,20 @@ struct NewProjectSheet: View {
 
     @State private var urlText = ""
     @State private var language: ProjectLanguage = .en
-    @State private var runFullPipeline = true
-    @State private var includeVideos = true
     @State private var errorMessage: String?
     @State private var isCreating = false
     @State private var focusField = true
 
     private var pipelineOptions: AutoPipelineOptions {
-        runFullPipeline ? .full(includeVideos: includeVideos) : .scriptOnly
+        .full(includeVideos: true)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Project")
+            Text("Single Video")
                 .font(.title2.bold())
 
-            Text("Paste a FeverCoach blog URL. Each project is one language — create separate projects for English, Korean, and Spanish articles.")
+            Text("Paste a FeverCoach blog URL. The full pipeline runs automatically: script → article check → clip prompts → voiceover → Veo videos.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -37,32 +35,6 @@ struct NewProjectSheet: View {
                 }
                 .pickerStyle(.segmented)
                 .disabled(isCreating)
-
-                Text("Script and voiceover use this language. Clip prompts use matching family appearance (see visual_cast.txt).")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Run full pipeline automatically", isOn: $runFullPipeline)
-                    .disabled(isCreating)
-
-                if runFullPipeline {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Runs in order: \(AutoPipelineOptions.full(includeVideos: includeVideos).stepLabels.joined(separator: " → "))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Toggle("Generate Veo videos (paid API)", isOn: $includeVideos)
-                            .font(.caption)
-                            .disabled(isCreating)
-
-                        Text("Article check runs but does not auto-edit the script — review flagged lines afterward. You can remake clips when it finishes.")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.leading, 4)
-                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -123,7 +95,7 @@ struct NewProjectSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .disabled(isCreating && store.pipeline.isRunning)
-                Button(createButtonTitle) {
+                Button("Create & Run Full Pipeline") {
                     Task { await create() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -137,15 +109,11 @@ struct NewProjectSheet: View {
         }
     }
 
-    private var createButtonTitle: String {
-        runFullPipeline ? "Create & Run Pipeline" : "Create & Generate Script"
-    }
-
     private var progressLabel: String {
         if let step = store.pipeline.runningStep {
             return "Running: \(step.title)…"
         }
-        return runFullPipeline ? "Starting pipeline…" : "Generating script…"
+        return "Starting pipeline…"
     }
 
     private var canCreate: Bool {

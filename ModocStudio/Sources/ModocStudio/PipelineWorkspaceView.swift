@@ -4,48 +4,37 @@ struct PipelineWorkspaceView: View {
     @EnvironmentObject private var store: ProjectStore
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView()
-        } detail: {
-            if let project = store.selectedProject {
-                ProjectDetailView(project: project)
+        Group {
+            if let project = store.pipelineFocusedProject {
+                PipelineProjectView(project: project)
             } else {
-                PipelineEmptyStateView()
+                RunPipelineHubView()
             }
         }
-        .withHomeToolbar(title: "Run Pipeline")
     }
 }
 
-struct PipelineEmptyStateView: View {
+private struct PipelineProjectView: View {
     @EnvironmentObject private var store: ProjectStore
+    let project: VideoProject
 
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "play.circle")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("Run Pipeline")
-                .font(.title2.bold())
-            Text("Create a new video or open a project to run workflow steps yourself.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            HStack(spacing: 12) {
-                Button("New Project…") {
-                    store.showNewProjectSheet = true
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    store.clearPipelineFocus()
+                } label: {
+                    Label("Back to creation", systemImage: "chevron.left")
                 }
-                .keyboardShortcut("n", modifiers: .command)
-                .buttonStyle(.borderedProminent)
-
-                Button("Open Existing Project") {
-                    store.openExistingProject()
-                }
-                .keyboardShortcut("o", modifiers: .command)
                 .buttonStyle(.bordered)
-                .controlSize(.large)
+                Spacer()
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            ProjectDetailView(project: project)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

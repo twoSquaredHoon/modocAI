@@ -34,6 +34,11 @@ enum ProjectLanguage: String, Codable, CaseIterable, Hashable {
     }
 }
 
+enum ArticleReviewStatus: String, Codable, Hashable {
+    case passed
+    case failed
+}
+
 struct ProjectManifest: Codable, Hashable {
     var id: String
     var title: String
@@ -42,6 +47,8 @@ struct ProjectManifest: Codable, Hashable {
     var phase: ProjectPhase
     var language: ProjectLanguage
     var lastError: String?
+    var articleReviewStatus: ArticleReviewStatus?
+    var articleReviewNotes: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title
@@ -50,6 +57,8 @@ struct ProjectManifest: Codable, Hashable {
         case phase
         case language
         case lastError = "last_error"
+        case articleReviewStatus = "article_review_status"
+        case articleReviewNotes = "article_review_notes"
     }
 
     init(
@@ -59,7 +68,9 @@ struct ProjectManifest: Codable, Hashable {
         createdAt: String,
         phase: ProjectPhase,
         language: ProjectLanguage = .en,
-        lastError: String?
+        lastError: String?,
+        articleReviewStatus: ArticleReviewStatus? = nil,
+        articleReviewNotes: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -68,6 +79,8 @@ struct ProjectManifest: Codable, Hashable {
         self.phase = phase
         self.language = language
         self.lastError = lastError
+        self.articleReviewStatus = articleReviewStatus
+        self.articleReviewNotes = articleReviewNotes
     }
 
     init(from decoder: Decoder) throws {
@@ -79,6 +92,8 @@ struct ProjectManifest: Codable, Hashable {
         phase = try container.decode(ProjectPhase.self, forKey: .phase)
         language = try container.decodeIfPresent(ProjectLanguage.self, forKey: .language) ?? .en
         lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+        articleReviewStatus = try container.decodeIfPresent(ArticleReviewStatus.self, forKey: .articleReviewStatus)
+        articleReviewNotes = try container.decodeIfPresent(String.self, forKey: .articleReviewNotes)
     }
 }
 

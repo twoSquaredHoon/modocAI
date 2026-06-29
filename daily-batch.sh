@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Daily batch: 5 newest EN + 5 newest KO posts → output/projects/YYYY-MM-DD/
+# Daily batch: EN + KO posts from the last 24 hours → output/projects/YYYY-MM-DD/
+# Pipeline stops after scripts and clip prompts (no voiceover or Veo videos).
 # Skips URLs already in processed_articles.json.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -41,12 +42,12 @@ mark_fetching(batch, pid=os.getpid())
 write_pid(batch, os.getpid())
 "
 
-echo "=== Fetch 5 newest EN + 5 newest KO (skip already processed) ==="
+echo "=== Fetch EN + KO posts from last 24 hours (skip already processed) ==="
 echo "Batch folder: $BATCH_DIR"
 rm -f "$BATCH_DIR/urls.txt"
 
 if ! .venv/bin/python scripts/fetch_blog_index.py \
-  --latest 5 \
+  --since-hours 24 \
   --output "$BATCH_DIR/urls.txt" \
   --batch-dir "$BATCH_DIR" \
   "$@"; then
@@ -73,5 +74,6 @@ mark_no_urls(Path('$BATCH_DIR'))
 fi
 
 echo ""
-echo "=== Run batch pipeline ==="
-./batch-run.sh "$BATCH_DIR/urls.txt" --projects-dir "$BATCH_DIR" "$@"
+echo "=== Run batch pipeline (scripts + clip prompts only) ==="
+./batch-run.sh "$BATCH_DIR/urls.txt" --projects-dir "$BATCH_DIR" \
+  --skip-voiceover --skip-videos "$@"

@@ -41,22 +41,28 @@ Requires `./setup.sh` once and `GEMINI_API_KEY` in `.env`.
 ## Daily / overnight (production)
 
 ```bash
-# 5 newest EN + 5 newest KO → output/projects/YYYY-MM-DD/ (skip already processed)
+# EN + KO posts from the last 24 hours → output/projects/YYYY-MM-DD/
+# Stops after scripts + clip prompts (no voiceover or Veo) — finish in Modoc Studio Browse
 ./start-daily-batch.sh    # recommended — survives Terminal closing
 
 # Or run in foreground (blocks until done)
 ./daily-batch.sh
 
-# Same but skip paid Veo videos
-./daily-batch.sh --skip-videos
+# Resume an interrupted daily batch (same flags: prompts only)
+./resume-batch.sh 2026-06-29
+```
 
+**In Modoc Studio:** use **Run Pipeline → Daily Batch** to start or resume. Use **Browse Projects** to edit and run voiceover/videos later.
+
+```bash
 # Resume after interrupt or partial failure
 ./resume-batch.sh              # today
 ./resume-batch.sh 2026-06-28   # specific date folder
 
-# Wider time window instead of "5 newest" (legacy fetch)
+# Manual fetch + batch (same 24h window as daily-batch.sh)
 ./fetch-daily-urls.sh --since-hours 24
-./batch-run.sh urls.txt
+./batch-run.sh urls.txt --projects-dir output/projects/$(date +%Y-%m-%d) \
+  --skip-voiceover --skip-videos
 ```
 
 ---

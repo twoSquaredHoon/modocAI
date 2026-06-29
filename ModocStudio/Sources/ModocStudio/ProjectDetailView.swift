@@ -8,6 +8,9 @@ struct ProjectDetailView: View {
     @State private var selectedClipID: String?
     @State private var actionError: String?
     @State private var confirmDeleteProject = false
+    @State private var loadedClips: [ClipRecord] = []
+    @State private var loadedScript = ""
+    @State private var isLoadingDetail = true
 
     enum DetailTab: String, CaseIterable, Identifiable {
         case workflow = "Workflow"
@@ -23,7 +26,7 @@ struct ProjectDetailView: View {
         var id: String { rawValue }
     }
 
-    private var clips: [ClipRecord] { current.loadClips() }
+    private var clips: [ClipRecord] { loadedClips }
     private var videoStatus: (done: Int, total: Int) { current.videoStatus(for: clips) }
 
     private var current: VideoProject {
@@ -43,45 +46,22 @@ struct ProjectDetailView: View {
             .padding()
 
             Group {
-                switch tab {
-                case .workflow:
-                    WorkflowView(project: current, actionError: $actionError, selectedTab: $tab)
-                case .graph:
-                    WorkflowGraphView(project: current)
-                case .statistics:
-                    StatisticsView(project: current)
-                case .script:
-                    ScriptReviewView(
-                        project: current,
-                        script: current.loadScript(),
-                        clips: clips
-                    )
-                case .articleCheck:
-                    ScriptCheckView(project: current)
-                case .prompts:
-                    PromptsView(decisions: current.loadDecisions(), clips: clips)
-                case .voiceover:
-                    VoiceoverView(project: current)
-                case .clips:
-                    ClipsGalleryView(
-                        project: current,
-                        clips: clips,
-                        selectedClipID: $selectedClipID
-                    )
-                case .log:
-                    LogView(log: store.pipeline.logText)
+                if isLoadingDetail {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading project…")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    tabContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationTitle(current.manifest.title)
-        .onAppear {
-            if selectedClipID == nil { selectedClipID = clips.first?.id }
-            store.refreshProjects()
-        }
-        .onChange(of: project.id) { _, _ in
-            selectedClipID = current.loadClips().first?.id
-        }
+        .onAppear { loadDetailContent() }
+        .onChange(of: project.id) { _, _ in loadDetailContent() }
         .confirmationDialog(
             "Delete “\(current.manifest.title)”?",
             isPresented: $confirmDeleteProject,
@@ -101,6 +81,59 @@ struct ProjectDetailView: View {
             try store.deleteProject(current)
         } catch {
             actionError = error.localizedDescription
+        }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case .workflow:
+            WorkflowView(project: current, actionError: $actionError, selectedTab: $tab)
+        case .graph:
+            WorkflowGraphView(project: current)
+        case .statistics:
+            StatisticsView(project: current)
+        case .script:
+            ScriptReviewView(
+                project: current,
+                script: loadedScript,
+                clips: clips
+            )
+        case .articleCheck:
+            ScriptCheckView(project: current)
+        case .prompts:
+            PromptsView(decisions: current.loadDecisions(), clips: clips)
+        case .voiceover:
+            VoiceoverView(project: current)
+        case .clips:
+            ClipsGalleryView(
+                project: current,
+                clips: clips,
+                selectedClipID: $selectedClipID
+            )
+        case .log:
+            LogView(log: store.pipeline.logText)
+        }
+    }
+
+    private func loadDetailContent() {
+        isLoadingDetail = true
+        let snapshot = current
+        Task {
+            await Task.yield()
+            let clips = await Task.detached(priority: .utility) {
+                snapshot.loadClips()
+            }.value
+            let script = await Task.detached(priority: .utility) {
+                snapshot.loadScript()
+            }.value
+            loadedClips = clips
+            loadedScript = script
+            if selectedClipID == nil {
+                selectedClipID = clips.first?.id
+            }
+            isLoadingDetail = false
+            store.scheduleRefreshProjects(autoSelect: false, delayMs: 300)
         }
     }
 

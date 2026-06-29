@@ -7,6 +7,12 @@ enum AppSection: String, Hashable {
     case stats
 }
 
+enum StatsSubsection: String, Hashable {
+    case hub
+    case projects
+    case time
+}
+
 struct ProjectBatchFolder: Identifiable, Hashable {
     static let legacyID = "__legacy__"
 
@@ -45,7 +51,7 @@ struct HomeView: View {
             HStack(spacing: 20) {
                 HomeDestinationCard(
                     title: "Browse Projects",
-                    subtitle: "Open batch folders by date and review finished work",
+                    subtitle: "Review daily batch work, edit scripts, and add or refine clip prompts",
                     systemImage: "calendar",
                     tint: .blue
                 ) {
@@ -54,7 +60,7 @@ struct HomeView: View {
 
                 HomeDestinationCard(
                     title: "Run Pipeline",
-                    subtitle: "Create a project, run steps, and edit scripts and clips",
+                    subtitle: "Create one full video or run today’s daily batch (scripts and prompts)",
                     systemImage: "play.circle.fill",
                     tint: .orange
                 ) {

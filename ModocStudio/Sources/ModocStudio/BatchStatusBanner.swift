@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BatchStatusBanner: View {
     let dateFolderID: String
+    var showControls: Bool = true
     @EnvironmentObject private var store: ProjectStore
     @State private var batchState: BatchStateFile?
     @State private var inferred: InferredBatchProgress?
@@ -49,6 +50,11 @@ struct BatchStatusBanner: View {
                     Text(statusSubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if !showControls {
+                        Text("Scripts + clip prompts · finish in Browse Projects")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
                 Spacer()
                 if let progress = progressLabel {
@@ -91,34 +97,27 @@ struct BatchStatusBanner: View {
                     .lineLimit(2)
             }
 
-            HStack(spacing: 10) {
-                if isRunningLive {
-                    ProgressView().controlSize(.small)
-                    Text("Running…")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                } else if needsResume {
-                    Button {
-                        store.resumeDailyBatch(dateFolderID: dateFolderID)
-                    } label: {
-                        Label("Resume Batch", systemImage: "play.fill")
+            if showControls {
+                actionRow
+            } else if isRunningLive || needsResume {
+                HStack(spacing: 8) {
+                    if isRunningLive {
+                        ProgressView().controlSize(.small)
+                        Text("Running in background")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Needs attention — use Run Pipeline to resume")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
                     }
-                    .buttonStyle(.borderedProminent)
-                } else if canStartBatch {
-                    Button {
-                        store.startDailyBatch(dateFolderID: dateFolderID)
-                    } label: {
-                        Label("Start Daily Batch", systemImage: "play.circle.fill")
+                    Spacer()
+                    Button("View Log") {
+                        store.revealBatchLog(in: dateFolderID)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-
-                Button {
-                    store.revealBatchLog(in: dateFolderID)
-                } label: {
-                    Label("View Log", systemImage: "doc.text")
-                }
-                .buttonStyle(.bordered)
             }
         }
         .padding(14)
@@ -127,8 +126,40 @@ struct BatchStatusBanner: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(statusColor.opacity(0.3), lineWidth: 1)
         )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, showControls ? 12 : 0)
+        .padding(.vertical, showControls ? 8 : 0)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            if isRunningLive {
+                ProgressView().controlSize(.small)
+                Text("Running…")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            } else if needsResume {
+                Button {
+                    store.resumeDailyBatch(dateFolderID: dateFolderID)
+                } label: {
+                    Label("Resume Batch", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+            } else if canStartBatch {
+                Button {
+                    store.startDailyBatch(dateFolderID: dateFolderID)
+                } label: {
+                    Label("Start Daily Batch", systemImage: "play.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            Button {
+                store.revealBatchLog(in: dateFolderID)
+            } label: {
+                Label("View Log", systemImage: "doc.text")
+            }
+            .buttonStyle(.bordered)
+        }
     }
 
     private var statusIcon: String {
@@ -178,7 +209,7 @@ struct BatchStatusBanner: View {
             Task { @MainActor in
                 batchState = BatchStateReader.load(from: batchFolderURL)
                 inferred = BatchStateReader.inferProgress(in: batchFolderURL, projects: projects)
-                store.refreshProjects(autoSelect: false)
+                store.scheduleRefreshProjects(autoSelect: false)
             }
         }
     }

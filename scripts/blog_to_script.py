@@ -33,6 +33,13 @@ def fetch_blog_text(url: str) -> str:
         favor_precision=True,
     )
     if not text or len(text.strip()) < 200:
+        text = trafilatura.extract(
+            downloaded,
+            include_comments=False,
+            include_tables=False,
+            favor_precision=False,
+        )
+    if not text or len(text.strip()) < 200:
         raise RuntimeError(
             "Could not extract enough article text from that page. "
             "The site may block bots or use a layout trafilatura cannot read."

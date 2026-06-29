@@ -11,32 +11,51 @@ final class ProjectStore: ObservableObject {
     @Published var browseSelectedLanguageFolder: String?
     @Published var showNewProjectSheet = false
     @Published var showSetupSheet = false
+    @Published var pipelineFocusedProjectID: String?
+    @Published private(set) var isRefreshingProjects = false
+    @Published var statsRefreshToken = UUID()
+    @Published var statsSubsection: StatsSubsection = .hub
     @Published var pipeline = PipelineService()
+
+    private var refreshTask: Task<Void, Never>?
+    private var cachedBatchFolders: [ProjectBatchFolder]?
 
     var selectedProject: VideoProject? {
         guard let id = selectedProjectID else { return nil }
         return projects.first { $0.id == id }
     }
 
+    var pipelineFocusedProject: VideoProject? {
+        guard let id = pipelineFocusedProjectID else { return nil }
+        return projects.first { $0.id == id }
+    }
+
     init() {
         ModocConfig.bootstrap()
-        refreshProjects(autoSelect: false)
         if ModocConfig.needsSetup {
             showSetupSheet = true
+        } else {
+            scheduleRefreshProjects(autoSelect: false, delayMs: 0)
         }
     }
 
     func goHome() {
         appSection = .home
+        statsSubsection = .hub
+    }
+
+    func requestStatsRefresh() {
+        statsRefreshToken = UUID()
+        scheduleRefreshProjects(autoSelect: false)
     }
 
     func enterBrowse() {
-        refreshProjects(autoSelect: false)
+        appSection = .browse
         if browseSelectedDateFolder == nil {
-            browseSelectedDateFolder = batchFolders().first?.id
+            browseSelectedDateFolder = ensureTodayInBatchFolders(batchFolders()).first?.id
         }
         syncBrowseLanguageSelection()
-        appSection = .browse
+        scheduleRefreshProjects(autoSelect: false)
     }
 
     func syncBrowseLanguageSelection() {
@@ -59,13 +78,22 @@ final class ProjectStore: ObservableObject {
     }
 
     func enterPipeline() {
-        refreshProjects(autoSelect: true)
         appSection = .pipeline
+        scheduleRefreshProjects(autoSelect: false)
+    }
+
+    func clearPipelineFocus() {
+        pipelineFocusedProjectID = nil
     }
 
     func enterStats() {
-        refreshProjects(autoSelect: false)
         appSection = .stats
+        statsSubsection = .hub
+        scheduleRefreshProjects(autoSelect: false)
+    }
+
+    func statsGoToHub() {
+        statsSubsection = .hub
     }
 
     func batchFolderName(for project: VideoProject) -> String? {
@@ -80,18 +108,10 @@ final class ProjectStore: ObservableObject {
 
     func languageFolders(in dateFolderID: String) -> [ProjectBatchLanguageFolder] {
         guard dateFolderID != ProjectBatchFolder.legacyID else { return [] }
-        let dateURL = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
         var counts: [String: Int] = [:]
-        for folderName in ProjectBatchFolderFormat.languageFolderOrder {
-            let langURL = dateURL.appendingPathComponent(folderName, isDirectory: true)
-            counts[folderName] = projectFolderPaths(in: langURL).count
-        }
-        // Legacy: projects sitting directly under the date folder (pre-english/korean layout)
-        for path in projectFolderPaths(in: dateURL) {
-            guard let project = loadProject(from: URL(fileURLWithPath: path, isDirectory: true)) else {
-                continue
-            }
-            let key = ProjectBatchFolderFormat.folderName(for: project.manifest.language)
+        for project in projects where batchFolderName(for: project) == dateFolderID {
+            let key = batchLanguageFolder(for: project, dateID: dateFolderID)
+                ?? ProjectBatchFolderFormat.folderName(for: project.manifest.language)
             counts[key, default: 0] += 1
         }
         return ProjectBatchFolderFormat.languageFolderOrder.compactMap { folderName in
@@ -107,38 +127,61 @@ final class ProjectStore: ObservableObject {
         }
     }
 
+    func batchLanguageFolder(for project: VideoProject, dateID: String) -> String? {
+        let projectsRoot = ModocConfig.projectsURL.standardizedFileURL.path
+        let folderPath = project.folderURL.standardizedFileURL.path
+        guard folderPath.hasPrefix(projectsRoot + "/") else { return nil }
+        let parts = String(folderPath.dropFirst(projectsRoot.count + 1))
+            .split(separator: "/")
+            .map(String.init)
+        guard parts.first == dateID, parts.count >= 2 else { return nil }
+        if parts.count >= 3, ProjectBatchFolderFormat.language(for: parts[1]) != nil {
+            return parts[1]
+        }
+        return nil
+    }
+
     func projects(inBatchFolder dateFolderID: String, languageFolder: String) -> [VideoProject] {
         if dateFolderID == ProjectBatchFolder.legacyID {
             return legacyProjects()
         }
-        let dateURL = ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
-        var results: [VideoProject] = []
-        let langURL = dateURL.appendingPathComponent(languageFolder, isDirectory: true)
-        for path in projectFolderPaths(in: langURL) {
-            if let project = loadProject(from: URL(fileURLWithPath: path, isDirectory: true)) {
-                results.append(project)
+        guard let language = ProjectBatchFolderFormat.language(for: languageFolder) else { return [] }
+        return projects.filter { project in
+            guard batchFolderName(for: project) == dateFolderID else { return false }
+            if let langDir = batchLanguageFolder(for: project, dateID: dateFolderID) {
+                return langDir == languageFolder
             }
+            return project.manifest.language == language
         }
-        if let language = ProjectBatchFolderFormat.language(for: languageFolder) {
-            for path in projectFolderPaths(in: dateURL) {
-                guard let project = loadProject(from: URL(fileURLWithPath: path, isDirectory: true)),
-                      project.manifest.language == language else { continue }
-                results.append(project)
-            }
-        }
-        var seen = Set<String>()
-        return results.filter { seen.insert($0.id).inserted }
-            .sorted { $0.manifest.createdAt > $1.manifest.createdAt }
+        .sorted { $0.manifest.createdAt > $1.manifest.createdAt }
     }
 
     func projects(inBatchFolder folderID: String) -> [VideoProject] {
         if folderID == ProjectBatchFolder.legacyID {
             return legacyProjects()
         }
-        return languageFolders(in: folderID).flatMap { projects(inBatchFolder: folderID, languageFolder: $0.id) }
+        return projects.filter { batchFolderName(for: $0) == folderID }
+            .sorted { $0.manifest.createdAt > $1.manifest.createdAt }
     }
 
     func batchFolders() -> [ProjectBatchFolder] {
+        if let cachedBatchFolders { return cachedBatchFolders }
+        let built = buildBatchFolders()
+        cachedBatchFolders = built
+        return built
+    }
+
+    private func buildBatchFolders() -> [ProjectBatchFolder] {
+        var countsByDate: [String: Int] = [:]
+        var legacyCount = 0
+        for project in projects {
+            if let date = batchFolderName(for: project) {
+                countsByDate[date, default: 0] += 1
+            } else {
+                legacyCount += 1
+            }
+        }
+
         let root = ModocConfig.projectsURL
         guard let entries = try? FileManager.default.contentsOfDirectory(
             at: root,
@@ -147,15 +190,13 @@ final class ProjectStore: ObservableObject {
         ) else { return [] }
 
         var folders: [ProjectBatchFolder] = []
-        var legacyCount = 0
+        var rootLegacyFolders = 0
 
         for entry in entries where entry.hasDirectoryPath {
             let name = entry.lastPathComponent
             if ProjectBatchFolderFormat.isDateBatchFolder(name) {
-                let count = projects(inBatchFolder: name).count
-                let hasActivity = BatchStateReader.hasBatchActivity(
-                    in: root.appendingPathComponent(name, isDirectory: true)
-                )
+                let count = countsByDate[name, default: 0]
+                let hasActivity = BatchStateReader.hasBatchActivity(in: entry)
                 if count > 0 || hasActivity {
                     folders.append(ProjectBatchFolder(
                         id: name,
@@ -167,15 +208,16 @@ final class ProjectStore: ObservableObject {
                 continue
             }
             if isProjectFolder(entry) {
-                legacyCount += 1
+                rootLegacyFolders += 1
             }
         }
 
-        if legacyCount > 0 {
+        let totalLegacy = max(legacyCount, rootLegacyFolders)
+        if totalLegacy > 0 {
             folders.append(ProjectBatchFolder(
                 id: ProjectBatchFolder.legacyID,
                 displayTitle: "Other projects",
-                projectCount: legacyCount,
+                projectCount: totalLegacy,
                 sortKey: "0"
             ))
         }
@@ -200,15 +242,7 @@ final class ProjectStore: ObservableObject {
     }
 
     private func legacyProjects() -> [VideoProject] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: ModocConfig.projectsURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-
-        return entries
-            .filter { $0.hasDirectoryPath && isProjectFolder($0) }
-            .compactMap { loadProject(from: $0) }
+        projects.filter { batchFolderName(for: $0) == nil }
             .sorted { $0.manifest.createdAt > $1.manifest.createdAt }
     }
 
@@ -227,6 +261,109 @@ final class ProjectStore: ObservableObject {
             )
         }
         .sorted { $0.summary.totalPipelineSeconds > $1.summary.totalPipelineSeconds }
+    }
+
+    func projectsGroupedByLanguage() -> [(language: ProjectLanguage, projects: [VideoProject])] {
+        ProjectLanguage.allCases.compactMap { language in
+            let grouped = projects
+                .filter { $0.manifest.language == language }
+                .sorted {
+                    $0.manifest.title.localizedCaseInsensitiveCompare($1.manifest.title)
+                        == .orderedAscending
+                }
+            guard !grouped.isEmpty else { return nil }
+            return (language, grouped)
+        }
+    }
+
+    func completedProjectsGroupedByLanguage() -> [(language: ProjectLanguage, projects: [VideoProject])] {
+        ProjectLanguage.allCases.compactMap { language in
+            let grouped = projects
+                .filter { $0.manifest.language == language && $0.manifest.phase == .ready }
+                .sorted {
+                    $0.manifest.title.localizedCaseInsensitiveCompare($1.manifest.title)
+                        == .orderedAscending
+                }
+            guard !grouped.isEmpty else { return nil }
+            return (language, grouped)
+        }
+    }
+
+    func languageTimingTotals() -> [(language: ProjectLanguage, automated: Double, review: Double, total: Double, projectCount: Int)] {
+        var buckets: [ProjectLanguage: (automated: Double, review: Double, total: Double, count: Int)] = [:]
+        for row in globalStatsRows() {
+            let lang = row.project.manifest.language
+            var bucket = buckets[lang, default: (0, 0, 0, 0)]
+            bucket.automated += row.summary.totalAutomatedSeconds
+            bucket.review += row.summary.totalReviewSeconds
+            bucket.total += row.summary.totalPipelineSeconds
+            bucket.count += 1
+            buckets[lang] = bucket
+        }
+        return ProjectLanguage.allCases.compactMap { lang in
+            guard let bucket = buckets[lang] else { return nil }
+            return (lang, bucket.automated, bucket.review, bucket.total, bucket.count)
+        }
+    }
+
+    func openProjectInBrowse(_ project: VideoProject) {
+        appSection = .browse
+        selectedProjectID = project.id
+        if let batchDate = batchFolderName(for: project) {
+            browseSelectedDateFolder = batchDate
+        } else {
+            browseSelectedDateFolder = ProjectBatchFolder.legacyID
+        }
+        scheduleRefreshProjects(autoSelect: false, delayMs: 200)
+    }
+
+    func scheduleRefreshProjects(autoSelect: Bool = true, delayMs: UInt64 = 80) {
+        refreshTask?.cancel()
+        refreshTask = Task { @MainActor in
+            if delayMs > 0 {
+                try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            await refreshProjectsAsync(autoSelect: autoSelect)
+        }
+    }
+
+    func refreshProjectsAsync(autoSelect: Bool = true) async {
+        do {
+            try ModocConfig.ensureProjectsDirectory()
+        } catch {
+            showSetupSheet = true
+            return
+        }
+
+        if isRefreshingProjects { return }
+        isRefreshingProjects = true
+        defer { isRefreshingProjects = false }
+
+        let root = ModocConfig.projectsURL
+        let opened = ModocConfig.openedProjectPaths
+        let pipelineRunning = pipeline.isRunning
+
+        let loaded = await Task.detached(priority: .utility) {
+            ProjectDiskLoader.scan(root: root, openedPaths: opened, pipelineRunning: pipelineRunning)
+        }.value
+
+        guard !Task.isCancelled else { return }
+
+        projects = loaded
+        invalidateBatchFolderCache()
+
+        guard autoSelect else { return }
+
+        if selectedProjectID == nil, let first = loaded.first {
+            selectedProjectID = first.id
+        } else if let sel = selectedProjectID, !loaded.contains(where: { $0.id == sel }) {
+            selectedProjectID = loaded.first?.id
+        }
+    }
+
+    private func invalidateBatchFolderCache() {
+        cachedBatchFolders = nil
     }
 
     private func projectFolderPaths(in directory: URL) -> [String] {
@@ -270,23 +407,13 @@ final class ProjectStore: ObservableObject {
             return
         }
 
-        var folderPaths = Set<String>()
-        collectProjectFolderPaths(at: ModocConfig.projectsURL, into: &folderPaths)
-
-        for path in ModocConfig.openedProjectPaths {
-            folderPaths.insert(path)
-        }
-
-        var loaded: [VideoProject] = []
-        for path in folderPaths {
-            let folder = URL(fileURLWithPath: path, isDirectory: true)
-            guard FileManager.default.fileExists(atPath: path),
-                  let project = loadProject(from: folder) else { continue }
-            loaded.append(project)
-        }
-
-        loaded.sort { $0.manifest.createdAt > $1.manifest.createdAt }
+        let loaded = ProjectDiskLoader.scan(
+            root: ModocConfig.projectsURL,
+            openedPaths: ModocConfig.openedProjectPaths,
+            pipelineRunning: pipeline.isRunning
+        )
         projects = loaded
+        invalidateBatchFolderCache()
 
         guard autoSelect else { return }
 
@@ -334,12 +461,17 @@ final class ProjectStore: ObservableObject {
         }
 
         ModocConfig.registerOpenedProject(folder)
-        refreshProjects(autoSelect: true)
         selectedProjectID = folder.path
-        appSection = .pipeline
-        if let proj = loadProject(from: folder) {
-            PipelineTimeTracker.recordProjectOpened(proj)
+        pipelineFocusedProjectID = nil
+        appSection = .browse
+        if let project = loadProject(from: folder) {
+            PipelineTimeTracker.recordProjectOpened(project)
+            if let batchDate = batchFolderName(for: project) {
+                browseSelectedDateFolder = batchDate
+                syncBrowseLanguageSelection()
+            }
         }
+        scheduleRefreshProjects(autoSelect: true, delayMs: 150)
     }
 
     private func createManifestForLegacyFolder(_ folder: URL) throws {
@@ -360,65 +492,13 @@ final class ProjectStore: ObservableObject {
     }
 
     func loadProject(from folder: URL) -> VideoProject? {
-        let folder = folder.standardizedFileURL
-        let manifestURL = folder.appendingPathComponent("project.json")
-        guard let data = try? Data(contentsOf: manifestURL),
-              var manifest = try? JSONDecoder().decode(ProjectManifest.self, from: data) else {
-            return nil
-        }
-        syncPhase(projectFolder: folder, manifest: &manifest)
-        let project = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
-        try? LanguageWorkspace.migrateLegacyIfNeeded(project)
-        return project
-    }
-
-    private func syncPhase(projectFolder: URL, manifest: inout ProjectManifest) {
-        let script = projectFolder.appendingPathComponent("script.txt")
-        let clips = projectFolder.appendingPathComponent("clips.json")
-
-        if pipeline.isRunning { return }
-
-        if manifest.phase == .creatingScript || manifest.phase == .generatingPrompts
-            || manifest.phase == .generatingVoiceover || manifest.phase == .generatingVideos {
-            return
-        }
-
-        if !FileManager.default.fileExists(atPath: script.path) {
-            manifest.phase = .creatingScript
-        } else if !FileManager.default.fileExists(atPath: clips.path) {
-            manifest.phase = .scriptReview
-        } else if !VideoProject(id: projectFolder.path, folderURL: projectFolder, manifest: manifest).hasVoiceover {
-            let project = VideoProject(id: projectFolder.path, folderURL: projectFolder, manifest: manifest)
-            let clipList = project.loadClips()
-            let status = project.videoStatus(for: clipList)
-            if status.total > 0 && status.done >= status.total {
-                manifest.phase = project.hasVoiceover ? .ready : .promptsReview
-            } else if status.done > 0 {
-                manifest.phase = .voiceoverReview
-            } else {
-                manifest.phase = .promptsReview
-            }
-        } else {
-            let project = VideoProject(id: projectFolder.path, folderURL: projectFolder, manifest: manifest)
-            let clipList = project.loadClips()
-            let status = project.videoStatus(for: clipList)
-            if status.total > 0 && status.done >= status.total {
-                manifest.phase = .ready
-            } else {
-                manifest.phase = .voiceoverReview
-            }
-        }
-
-        if manifest.phase == .ready || manifest.phase == .scriptReview
-            || manifest.phase == .promptsReview || manifest.phase == .voiceoverReview {
-            try? saveManifest(manifest, folder: projectFolder)
-        }
+        ProjectDiskLoader.loadProject(from: folder, pipelineRunning: pipeline.isRunning)
     }
 
     func createProject(
         blogURL: String,
         language: ProjectLanguage = .en,
-        autoPipeline: AutoPipelineOptions = .scriptOnly
+        autoPipeline: AutoPipelineOptions = .full(includeVideos: true)
     ) async throws {
         if ModocConfig.needsSetup {
             showSetupSheet = true
@@ -453,6 +533,7 @@ final class ProjectStore: ObservableObject {
 
         refreshProjects()
         selectedProjectID = folder.path
+        pipelineFocusedProjectID = folder.path
         appSection = .pipeline
 
         let project = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
@@ -808,6 +889,39 @@ final class ProjectStore: ObservableObject {
         try data.write(to: url)
     }
 
+    func setArticleReviewStatus(_ project: VideoProject, status: ArticleReviewStatus) {
+        var manifest = project.manifest
+        manifest.articleReviewStatus = status
+        if status == .passed {
+            manifest.articleReviewNotes = nil
+        }
+        try? saveManifest(manifest, folder: project.folderURL)
+        applyManifestUpdate(manifest, projectID: project.id)
+    }
+
+    func clearArticleReviewStatus(_ project: VideoProject) {
+        var manifest = project.manifest
+        manifest.articleReviewStatus = nil
+        manifest.articleReviewNotes = nil
+        try? saveManifest(manifest, folder: project.folderURL)
+        applyManifestUpdate(manifest, projectID: project.id)
+    }
+
+    func setArticleReviewNotes(_ project: VideoProject, notes: String) {
+        guard project.manifest.articleReviewStatus == .failed else { return }
+        var manifest = project.manifest
+        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        manifest.articleReviewNotes = trimmed.isEmpty ? nil : notes
+        try? saveManifest(manifest, folder: project.folderURL)
+        applyManifestUpdate(manifest, projectID: project.id)
+    }
+
+    private func applyManifestUpdate(_ manifest: ProjectManifest, projectID: String) {
+        if let idx = projects.firstIndex(where: { $0.id == projectID }) {
+            projects[idx].manifest = manifest
+        }
+    }
+
     func revealInFinder(_ project: VideoProject) {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.folderURL.path)
     }
@@ -851,9 +965,8 @@ final class ProjectStore: ObservableObject {
         let date = dateFolderID ?? BatchRunner.todayFolderID()
         do {
             try BatchRunner.startDailyBatch(dateFolderID: date)
-            browseSelectedDateFolder = date
-            appSection = .browse
-            syncBrowseLanguageSelection()
+            pipelineFocusedProjectID = nil
+            appSection = .pipeline
         } catch {
             ProjectFolderPicker.showError(error.localizedDescription)
         }
@@ -930,24 +1043,6 @@ final class ProjectStore: ObservableObject {
         let f = DateFormatter()
         f.dateFormat = "yyyyMMdd-HHmm"
         return f.string(from: Date())
-    }
-
-    /// Finds project folders up to three levels deep (date / english|korean / project).
-    private func collectProjectFolderPaths(at root: URL, into paths: inout Set<String>, depth: Int = 0) {
-        guard depth <= 3 else { return }
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return }
-
-        for entry in entries where entry.hasDirectoryPath {
-            if isProjectFolder(entry) {
-                paths.insert(entry.standardizedFileURL.path)
-            } else {
-                collectProjectFolderPaths(at: entry, into: &paths, depth: depth + 1)
-            }
-        }
     }
 }
 
