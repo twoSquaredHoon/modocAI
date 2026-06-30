@@ -11,16 +11,22 @@ struct NewProjectSheet: View {
     @State private var isCreating = false
     @State private var focusField = true
 
+    private var isManual: Bool {
+        store.newProjectCreationMode == .manual
+    }
+
     private var pipelineOptions: AutoPipelineOptions {
-        .full(includeVideos: true)
+        isManual ? .none : .full(includeVideos: true)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Single Video")
+            Text(isManual ? "Single Video (Manual)" : "Single Video")
                 .font(.title2.bold())
 
-            Text("Paste a FeverCoach blog URL. The full pipeline runs automatically: script → article check → clip prompts → voiceover → Veo videos.")
+            Text(isManual
+                ? "Paste a FeverCoach blog URL to create a project. Run each pipeline step yourself in Browse Projects — script, article check, clip prompts, voiceover, and videos."
+                : "Paste a FeverCoach blog URL. The full pipeline runs automatically: script → article check → clip prompts → voiceover → Veo videos.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -76,7 +82,7 @@ struct NewProjectSheet: View {
                     .font(.callout)
             }
 
-            if isCreating || store.pipeline.isRunning {
+            if !isManual && (isCreating || store.pipeline.isRunning) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         ProgressView()
@@ -95,7 +101,7 @@ struct NewProjectSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .disabled(isCreating && store.pipeline.isRunning)
-                Button("Create & Run Full Pipeline") {
+                Button(isManual ? "Create Project" : "Create & Run Full Pipeline") {
                     Task { await create() }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -145,7 +151,8 @@ struct NewProjectSheet: View {
             try await store.createProject(
                 blogURL: url,
                 language: language,
-                autoPipeline: pipelineOptions
+                autoPipeline: pipelineOptions,
+                openInBrowse: isManual
             )
             dismiss()
         } catch {

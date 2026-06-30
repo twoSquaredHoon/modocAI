@@ -13,6 +13,11 @@ enum StatsSubsection: String, Hashable {
     case time
 }
 
+enum NewProjectCreationMode {
+    case automaticFull
+    case manual
+}
+
 struct ProjectBatchFolder: Identifiable, Hashable {
     static let legacyID = "__legacy__"
 
@@ -187,16 +192,41 @@ enum ProjectBatchFolderFormat {
 
     private static let folderDate = DateFormatter()
 
+    static func isDateBatchFolder(_ name: String) -> Bool {
+        name.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+    }
+
+    static func isCustomBatchFolder(_ name: String) -> Bool {
+        name.range(of: #"^\d{4}-\d{2}-\d{2}-custom"#, options: .regularExpression) != nil
+    }
+
+    static func isBatchFolder(_ name: String) -> Bool {
+        isDateBatchFolder(name) || isCustomBatchFolder(name)
+    }
+
     static func displayTitle(for folderName: String) -> String {
+        if isCustomBatchFolder(folderName) {
+            let parts = folderName.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 3 else { return folderName }
+            let datePart = parts.prefix(3).joined(separator: "-")
+            folderDate.dateFormat = "yyyy-MM-dd"
+            if let date = folderDate.date(from: datePart) {
+                let display = DateFormatter()
+                display.dateStyle = .long
+                display.timeStyle = .none
+                var title = display.string(from: date) + " — Custom"
+                if parts.count >= 5, parts[3] == "custom" {
+                    title += " \(parts[4])"
+                }
+                return title
+            }
+            return folderName.replacingOccurrences(of: "-", with: " ").capitalized
+        }
         folderDate.dateFormat = "yyyy-MM-dd"
         guard let date = folderDate.date(from: folderName) else { return folderName }
         let display = DateFormatter()
         display.dateStyle = .long
         display.timeStyle = .none
         return display.string(from: date)
-    }
-
-    static func isDateBatchFolder(_ name: String) -> Bool {
-        name.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
     }
 }

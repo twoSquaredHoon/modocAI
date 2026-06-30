@@ -21,5 +21,11 @@ fi
 
 export PYTHONUNBUFFERED=1
 echo "Resuming batch in $BATCH_DIR"
+
+BATCH_FLAGS=(--skip-voiceover --skip-videos)
+if [[ -f "$BATCH_DIR/batch_pipeline_flags.txt" ]]; then
+  read -r -a BATCH_FLAGS < "$BATCH_DIR/batch_pipeline_flags.txt"
+fi
+
 exec ./batch-run.sh "$BATCH_DIR/urls.txt" --projects-dir "$BATCH_DIR" --resume \
-  --skip-voiceover --skip-videos "$@"
+  "${BATCH_FLAGS[@]}" "$@"

@@ -73,6 +73,10 @@ struct ModocStudioApp: App {
                     NewProjectSheet()
                         .environmentObject(store)
                 }
+                .sheet(isPresented: $store.showCustomBatchSheet) {
+                    CustomBatchSheet()
+                        .environmentObject(store)
+                }
                 .sheet(isPresented: $store.showSetupSheet) {
                     SetupSheet()
                         .environmentObject(store)

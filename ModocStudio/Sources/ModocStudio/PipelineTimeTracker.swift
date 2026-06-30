@@ -142,7 +142,8 @@ struct PipelineLanguageSummary: Identifiable {
     }
 
     var openReviewSeconds: Double {
-        guard let start = stats.openReviewStartedAt,
+        guard PipelineTimeTracker.isEnabled,
+              let start = stats.openReviewStartedAt,
               let date = ISO8601DateFormatter().date(from: start) else { return 0 }
         return Date().timeIntervalSince(date)
     }
@@ -152,7 +153,9 @@ struct PipelineLanguageSummary: Identifiable {
     }
 
     var isFinalized: Bool { stats.finalizedAt != nil }
-    var hasOpenReview: Bool { stats.openReviewStartedAt != nil && !isFinalized }
+    var hasOpenReview: Bool {
+        PipelineTimeTracker.isEnabled && stats.openReviewStartedAt != nil && !isFinalized
+    }
 }
 
 enum PipelineDurationFormat {
@@ -179,6 +182,9 @@ enum PipelineDurationFormat {
 // MARK: - Tracker
 
 enum PipelineTimeTracker {
+    /// Set to `true` to resume automated/manual pipeline time tracking.
+    static let isEnabled = false
+
     private static func statsURL(for project: VideoProject) -> URL {
         project.folderURL.appendingPathComponent("pipeline_stats.json")
     }
@@ -199,6 +205,7 @@ enum PipelineTimeTracker {
     }
 
     static func recordProjectOpened(_ project: VideoProject) {
+        guard isEnabled else { return }
         var file = load(for: project)
         if file.projectStartedAt == nil {
             file.projectStartedAt = PipelineDurationFormat.iso()
@@ -211,6 +218,7 @@ enum PipelineTimeTracker {
         from previous: ProjectLanguage,
         to next: ProjectLanguage
     ) {
+        guard isEnabled else { return }
         var file = load(for: project)
         closeOpenReview(in: &file, language: previous, endedBy: "language_switch_to_\(next.rawValue)")
         var prev = langStats(in: &file, language: previous)
@@ -230,6 +238,7 @@ enum PipelineTimeTracker {
         project: VideoProject,
         step: PipelineService.PipelineStep
     ) -> String {
+        guard isEnabled else { return "" }
         let language = project.manifest.language
         let meta = stepMeta(step)
         var file = load(for: project)
@@ -263,6 +272,7 @@ enum PipelineTimeTracker {
         runId: String,
         success: Bool
     ) {
+        guard isEnabled, !runId.isEmpty else { return }
         let language = project.manifest.language
         var file = load(for: project)
         guard var lang = file.languages[language.rawValue],
@@ -292,6 +302,7 @@ enum PipelineTimeTracker {
     }
 
     static func finalizeLanguage(project: VideoProject, language: ProjectLanguage) {
+        guard isEnabled else { return }
         var file = load(for: project)
         closeOpenReview(in: &file, language: language, endedBy: "finalize")
         var lang = langStats(in: &file, language: language)

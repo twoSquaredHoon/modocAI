@@ -10,6 +10,8 @@ final class ProjectStore: ObservableObject {
     @Published var browseSelectedDateFolder: String?
     @Published var browseSelectedLanguageFolder: String?
     @Published var showNewProjectSheet = false
+    @Published var showCustomBatchSheet = false
+    @Published var newProjectCreationMode: NewProjectCreationMode = .automaticFull
     @Published var showSetupSheet = false
     @Published var pipelineFocusedProjectID: String?
     @Published private(set) var isRefreshingProjects = false
@@ -102,7 +104,7 @@ final class ProjectStore: ObservableObject {
         guard folderPath.hasPrefix(projectsRoot + "/") else { return nil }
         let remainder = String(folderPath.dropFirst(projectsRoot.count + 1))
         let parts = remainder.split(separator: "/").map(String.init)
-        guard parts.count >= 2, ProjectBatchFolderFormat.isDateBatchFolder(parts[0]) else { return nil }
+        guard parts.count >= 2, ProjectBatchFolderFormat.isBatchFolder(parts[0]) else { return nil }
         return parts[0]
     }
 
@@ -194,7 +196,7 @@ final class ProjectStore: ObservableObject {
 
         for entry in entries where entry.hasDirectoryPath {
             let name = entry.lastPathComponent
-            if ProjectBatchFolderFormat.isDateBatchFolder(name) {
+            if ProjectBatchFolderFormat.isBatchFolder(name) {
                 let count = countsByDate[name, default: 0]
                 let hasActivity = BatchStateReader.hasBatchActivity(in: entry)
                 if count > 0 || hasActivity {
@@ -498,7 +500,8 @@ final class ProjectStore: ObservableObject {
     func createProject(
         blogURL: String,
         language: ProjectLanguage = .en,
-        autoPipeline: AutoPipelineOptions = .full(includeVideos: true)
+        autoPipeline: AutoPipelineOptions = .full(includeVideos: true),
+        openInBrowse: Bool = false
     ) async throws {
         if ModocConfig.needsSetup {
             showSetupSheet = true
@@ -533,16 +536,25 @@ final class ProjectStore: ObservableObject {
 
         refreshProjects()
         selectedProjectID = folder.path
-        pipelineFocusedProjectID = folder.path
-        appSection = .pipeline
 
         let project = VideoProject(id: folder.path, folderURL: folder, manifest: manifest)
-        try await runAutoPipeline(project, options: autoPipeline)
 
-        if let updated = loadProject(from: folder), updated.hasScript {
-            var finalManifest = updated.manifest
-            finalManifest.title = VideoProject.title(from: updated.loadScript())
-            try saveManifest(finalManifest, folder: folder)
+        if autoPipeline.hasAnyStep {
+            pipelineFocusedProjectID = folder.path
+            appSection = .pipeline
+            try await runAutoPipeline(project, options: autoPipeline)
+
+            if let updated = loadProject(from: folder), updated.hasScript {
+                var finalManifest = updated.manifest
+                finalManifest.title = VideoProject.title(from: updated.loadScript())
+                try saveManifest(finalManifest, folder: folder)
+            }
+        } else if openInBrowse {
+            pipelineFocusedProjectID = nil
+            openProjectInBrowse(project)
+        } else {
+            pipelineFocusedProjectID = folder.path
+            appSection = .pipeline
         }
 
         refreshProjects()
@@ -970,6 +982,14 @@ final class ProjectStore: ObservableObject {
         } catch {
             ProjectFolderPicker.showError(error.localizedDescription)
         }
+    }
+
+    func startCustomBatch(options: CustomBatchOptions) throws {
+        try BatchRunner.startCustomBatch(options: options)
+        pipelineFocusedProjectID = nil
+        appSection = .pipeline
+        browseSelectedDateFolder = options.dateFolderID
+        scheduleRefreshProjects(autoSelect: false, delayMs: 500)
     }
 
     func resumeDailyBatch(dateFolderID: String) {

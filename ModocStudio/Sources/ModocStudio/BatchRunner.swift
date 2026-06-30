@@ -21,13 +21,19 @@ enum BatchRunner {
         ModocConfig.projectsURL.appendingPathComponent(dateFolderID, isDirectory: true)
     }
 
-    static func logURL(for dateFolderID: String) -> URL {
-        batchDir(for: dateFolderID).appendingPathComponent("daily-batch-run.log")
+    static func logURL(for dateFolderID: String, filename: String = "daily-batch-run.log") -> URL {
+        batchDir(for: dateFolderID).appendingPathComponent(filename)
     }
 
     static func todayFolderID() -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date())
+    }
+
+    static func customFolderID() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd-'custom'-HHmm"
         return f.string(from: Date())
     }
 
@@ -45,6 +51,28 @@ enum BatchRunner {
         cd '\(root)' && \
         export PYTHONUNBUFFERED=1 && \
         nohup ./daily-batch.sh >> '\(log)' 2>&1 &
+        """
+        guard try launchDetached(shellCommand: cmd) else {
+            throw BatchRunnerError.launchFailed
+        }
+    }
+
+    static func startCustomBatch(options: CustomBatchOptions) throws {
+        let dateFolderID = options.dateFolderID
+        guard !BatchStateReader.isProcessRunning(for: dateFolderID) else {
+            throw BatchRunnerError.alreadyRunning
+        }
+
+        let root = shellEscape(ModocConfig.rootURL.path)
+        let batchDirPath = shellEscape(batchDir(for: dateFolderID).path)
+        let log = shellEscape(logURL(for: dateFolderID, filename: "custom-batch-run.log").path)
+        let args = options.shellArguments().map { shellEscape($0) }.joined(separator: " ")
+
+        let cmd = """
+        mkdir -p '\(batchDirPath)' && \
+        cd '\(root)' && \
+        export PYTHONUNBUFFERED=1 && \
+        nohup ./custom-batch.sh \(args) >> '\(log)' 2>&1 &
         """
         guard try launchDetached(shellCommand: cmd) else {
             throw BatchRunnerError.launchFailed

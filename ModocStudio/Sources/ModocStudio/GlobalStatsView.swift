@@ -21,7 +21,6 @@ struct GlobalStatsView: View {
     @State private var selectedLanguage: ProjectLanguage?
     @State private var reviewFilter: ArticleReviewFilter = .all
     @State private var timingRows: [GlobalProjectStatsRow] = []
-    @State private var refreshTimer: Timer?
 
     private var completedByLanguage: [(language: ProjectLanguage, projects: [VideoProject])] {
         store.completedProjectsGroupedByLanguage()
@@ -92,7 +91,6 @@ struct GlobalStatsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { reload() }
-        .onDisappear { refreshTimer?.invalidate() }
         .onChange(of: store.statsRefreshToken) { _, _ in reload() }
         .onChange(of: store.statsSubsection) { _, section in
             if section == .projects, selectedLanguage == nil {
@@ -464,12 +462,6 @@ struct GlobalStatsView: View {
             selectedLanguage = completedByLanguage.first?.language
         }
         store.scheduleRefreshProjects(autoSelect: false)
-        refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
-            Task { @MainActor in
-                timingRows = store.globalStatsRows()
-            }
-        }
     }
 }
 

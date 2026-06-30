@@ -5,18 +5,34 @@ struct RunPipelineHubView: View {
 
     private var todayID: String { BatchRunner.todayFolderID() }
 
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 20),
+        GridItem(.flexible(), spacing: 20),
+    ]
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
 
-                HStack(alignment: .top, spacing: 20) {
+                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 20) {
                     creationCard(
                         title: "Single Video",
                         subtitle: "Paste one blog URL and run the full pipeline automatically — script, article check, clip prompts, voiceover, and Veo videos.",
                         systemImage: "1.circle.fill",
                         tint: .orange
                     ) {
+                        store.newProjectCreationMode = .automaticFull
+                        store.showNewProjectSheet = true
+                    }
+
+                    creationCard(
+                        title: "Single Video (Manual)",
+                        subtitle: "Paste one blog URL and create the project only. Run each step yourself in Browse Projects when you are ready.",
+                        systemImage: "hand.tap.fill",
+                        tint: .purple
+                    ) {
+                        store.newProjectCreationMode = .manual
                         store.showNewProjectSheet = true
                     }
 
@@ -27,6 +43,15 @@ struct RunPipelineHubView: View {
                         tint: .blue
                     ) {
                         store.startDailyBatch(dateFolderID: todayID)
+                    }
+
+                    creationCard(
+                        title: "Custom Batch",
+                        subtitle: "Choose how many articles, language, time window, and which pipeline steps to run — article check, voiceover, and videos optional.",
+                        systemImage: "slider.horizontal.3",
+                        tint: .teal
+                    ) {
+                        store.showCustomBatchSheet = true
                     }
                 }
 
@@ -87,7 +112,7 @@ struct RunPipelineHubView: View {
                     .foregroundStyle(tint)
             }
             .padding(24)
-            .frame(maxWidth: .infinity, minHeight: 240, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color(nsColor: .controlBackgroundColor))

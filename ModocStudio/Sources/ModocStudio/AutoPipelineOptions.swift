@@ -16,6 +16,14 @@ struct AutoPipelineOptions: Equatable {
         runVideos: false
     )
 
+    static let none = AutoPipelineOptions(
+        runScript: false,
+        runArticleCheck: false,
+        runClipPrompts: false,
+        runVoiceover: false,
+        runVideos: false
+    )
+
     static func full(includeVideos: Bool = true) -> AutoPipelineOptions {
         AutoPipelineOptions(
             runScript: true,
@@ -28,6 +36,10 @@ struct AutoPipelineOptions: Equatable {
 
     var runsMoreThanScript: Bool {
         runArticleCheck || runClipPrompts || runVoiceover || runVideos
+    }
+
+    var hasAnyStep: Bool {
+        runScript || runArticleCheck || runClipPrompts || runVoiceover || runVideos
     }
 
     var stepLabels: [String] {

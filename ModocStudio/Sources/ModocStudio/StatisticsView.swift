@@ -4,7 +4,6 @@ struct StatisticsView: View {
     let project: VideoProject
 
     @State private var statsFile: PipelineStatsFile = .empty()
-    @State private var refreshTimer: Timer?
 
     private var projectLanguage: ProjectLanguage { project.manifest.language }
 
@@ -41,7 +40,6 @@ struct StatisticsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { reload() }
-        .onDisappear { refreshTimer?.invalidate() }
         .onChange(of: project.id) { _, _ in reload() }
     }
 
@@ -205,11 +203,5 @@ struct StatisticsView: View {
 
     private func reload() {
         statsFile = PipelineTimeTracker.load(for: project)
-        refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            Task { @MainActor in
-                statsFile = PipelineTimeTracker.load(for: project)
-            }
-        }
     }
 }

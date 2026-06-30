@@ -75,5 +75,6 @@ fi
 
 echo ""
 echo "=== Run batch pipeline (scripts + clip prompts only) ==="
+echo '--skip-voiceover --skip-videos' > "$BATCH_DIR/batch_pipeline_flags.txt"
 ./batch-run.sh "$BATCH_DIR/urls.txt" --projects-dir "$BATCH_DIR" \
   --skip-voiceover --skip-videos "$@"
